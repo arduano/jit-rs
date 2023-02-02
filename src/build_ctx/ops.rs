@@ -1,7 +1,7 @@
 use inkwell::{builder::Builder, values::BasicValue, FloatPredicate, IntPredicate};
 
 use crate::{
-    syntax::{BinaryMathOp, BinaryMathOpKind, ComparisonOpKind},
+    syntax::{BinaryMathOpKind, ComparisonOpKind},
     types::IntrinsicValueType,
 };
 

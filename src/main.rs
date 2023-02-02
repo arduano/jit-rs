@@ -1,11 +1,5 @@
-use counter::Counter;
-use inkwell::builder::Builder;
 use inkwell::context::Context;
-use inkwell::execution_engine::{ExecutionEngine, JitFunction};
-use inkwell::module::Module;
-use inkwell::types::BasicType;
-use inkwell::OptimizationLevel;
-use std::error::Error;
+
 use syntax::Function;
 
 use crate::build_ctx::GlobalCtx;

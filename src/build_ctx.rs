@@ -5,16 +5,16 @@ use inkwell::{
     context::Context,
     execution_engine::ExecutionEngine,
     module::Module,
-    passes::{PassManager, PassManagerBuilder},
-    targets::{CodeModel, FileType, RelocMode, Target, TargetMachine, TargetTriple},
+    passes::PassManager,
+    targets::{CodeModel, FileType, RelocMode, Target, TargetTriple},
     types::{BasicType, BasicTypeEnum},
-    values::{BasicValueEnum, FunctionValue, PointerValue},
+    values::{BasicValueEnum, PointerValue},
     OptimizationLevel,
 };
 
 use crate::{
     counter::Counter,
-    syntax::{self, BinaryMathOpKind, BodyStatement, BodyStatementKind, Expression, Function},
+    syntax::{self, BodyStatement, BodyStatementKind, Expression, Function},
     types::IntrinsicValueType,
 };
 
@@ -73,7 +73,7 @@ pub struct ModuleCtx<'a> {
 }
 
 impl<'a> ModuleCtx<'a> {
-    fn new(global: &'a GlobalCtx, name: &str) -> Self {
+    fn new(global: &'a GlobalCtx, _name: &str) -> Self {
         let module = global.context.create_module("sum");
         let builder = global.context.create_builder();
 
@@ -208,7 +208,7 @@ impl<'a, 'ctx> FunctionBuilder<'a, 'ctx> {
                 let val = self.module.builder.build_load(var.llvm_ty, var.ptr, name);
                 Value { ty: var.ty, val }
             }
-            Expression::SingleOp(expr) => {
+            Expression::SingleOp(_expr) => {
                 todo!();
             }
             Expression::BinaryMathOp(expr) => {
