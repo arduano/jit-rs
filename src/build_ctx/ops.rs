@@ -1,11 +1,91 @@
-use inkwell::{builder::Builder, values::BasicValue, FloatPredicate, IntPredicate};
+use inkwell::{
+    builder::Builder, context::Context, values::BasicValue, FloatPredicate, IntPredicate,
+};
 
 use crate::{
-    syntax::{BinaryMathOpKind, ComparisonOpKind},
+    syntax::{BinaryMathOpKind, ComparisonOpKind, ConstantValue},
     types::IntrinsicValueType,
 };
 
 use super::Value;
+
+pub fn build_constant_value<'a>(ctx: &'a Context, val: &ConstantValue) -> Value<'a> {
+    use IntrinsicValueType::*;
+
+    match val {
+        &ConstantValue::Bool(val) => Value {
+            ty: Bool,
+            val: ctx
+                .bool_type()
+                .const_int(val as u64, false)
+                .as_basic_value_enum(),
+        },
+        &ConstantValue::U8(val) => Value {
+            ty: U8,
+            val: ctx
+                .i8_type()
+                .const_int(val as u64, false)
+                .as_basic_value_enum(),
+        },
+        &ConstantValue::U16(val) => Value {
+            ty: U16,
+            val: ctx
+                .i16_type()
+                .const_int(val as u64, false)
+                .as_basic_value_enum(),
+        },
+        &ConstantValue::U32(val) => Value {
+            ty: U32,
+            val: ctx
+                .i32_type()
+                .const_int(val as u64, false)
+                .as_basic_value_enum(),
+        },
+        &ConstantValue::U64(val) => Value {
+            ty: U64,
+            val: ctx
+                .i64_type()
+                .const_int(val as u64, false)
+                .as_basic_value_enum(),
+        },
+        &ConstantValue::I8(val) => Value {
+            ty: I8,
+            val: ctx
+                .i8_type()
+                .const_int(val as u64, true)
+                .as_basic_value_enum(),
+        },
+        &ConstantValue::I16(val) => Value {
+            ty: I16,
+            val: ctx
+                .i16_type()
+                .const_int(val as u64, true)
+                .as_basic_value_enum(),
+        },
+        &ConstantValue::I32(val) => Value {
+            ty: I32,
+            val: ctx
+                .i32_type()
+                .const_int(val as u64, true)
+                .as_basic_value_enum(),
+        },
+        &ConstantValue::I64(val) => Value {
+            ty: I64,
+            val: ctx
+                .i64_type()
+                .const_int(val as u64, true)
+                .as_basic_value_enum(),
+        },
+        &ConstantValue::F32(val) => Value {
+            ty: F32,
+            val: ctx.f32_type().const_float(val as f64).as_basic_value_enum(),
+        },
+        &ConstantValue::F64(val) => Value {
+            ty: F64,
+            val: ctx.f64_type().const_float(val as f64).as_basic_value_enum(),
+        },
+    }
+}
 
 pub fn build_binary_math_op<'a>(
     builder: &Builder<'a>,

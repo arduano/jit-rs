@@ -18,7 +18,7 @@ use crate::{
     types::IntrinsicValueType,
 };
 
-use self::ops::{build_binary_math_op, build_comparison_op};
+use self::ops::{build_binary_math_op, build_comparison_op, build_constant_value};
 
 mod ops;
 
@@ -203,6 +203,9 @@ impl<'a, 'ctx> FunctionBuilder<'a, 'ctx> {
 
     fn process_expr(&self, expr: &Expression) -> Value<'a> {
         match expr {
+            Expression::ConstantValue(val) => {
+                build_constant_value(&self.module.global.context, val)
+            }
             Expression::ReadVar(name) => {
                 let var = self.variables.get(name).unwrap();
                 let val = self.module.builder.build_load(var.llvm_ty, var.ptr, name);

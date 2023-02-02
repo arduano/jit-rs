@@ -3,7 +3,9 @@ use inkwell::context::Context;
 use syntax::Function;
 
 use crate::build_ctx::GlobalCtx;
-use crate::syntax::{BodyStatement, BodyStatementKind, Expression, Type, VariableDeclare};
+use crate::syntax::{
+    BodyStatement, BodyStatementKind, ConstantValue, Expression, Type, VariableDeclare,
+};
 use crate::types::IntrinsicValueType;
 
 mod build_ctx;
@@ -30,7 +32,7 @@ fn main() {
         body: vec![BodyStatement {
             kind: BodyStatementKind::Return(E::lt(
                 E::add(E::read_var("a"), E::mul(E::read_var("b"), E::read_var("c"))),
-                E::read_var("d"),
+                E::constant(ConstantValue::U32(50)),
             )),
         }],
     };
@@ -44,11 +46,11 @@ fn main() {
 
     let jit = module.execution_engine();
     let compiled = unsafe {
-        jit.get_function::<unsafe extern "C" fn(u32, u32, u32, u32) -> bool>("main")
+        jit.get_function::<unsafe extern "C" fn(u32, u32, u32) -> bool>("main")
             .unwrap()
     };
 
     unsafe {
-        dbg!(compiled.call(1, 10, 5, 50));
+        dbg!(compiled.call(1, 10, 5));
     }
 }

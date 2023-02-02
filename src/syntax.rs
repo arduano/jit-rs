@@ -29,10 +29,26 @@ pub enum BodyStatementKind {
 
 #[derive(Debug, Clone)]
 pub enum Expression {
+    ConstantValue(ConstantValue),
     BinaryMathOp(BinaryMathOp),
     ComparisonOp(ComparisonOp),
     SingleOp(SingleOp),
     ReadVar(String),
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum ConstantValue {
+    Bool(bool),
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+    F32(f32),
+    F64(f64),
 }
 
 #[derive(Debug, Clone)]
@@ -152,6 +168,10 @@ impl Expression {
 
     pub fn ge(lhs: Expression, rhs: Expression) -> Self {
         Self::new_cmp_op(ComparisonOpKind::Ge, lhs, rhs)
+    }
+
+    pub fn constant(value: ConstantValue) -> Self {
+        Expression::ConstantValue(value)
     }
 }
 
