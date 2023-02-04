@@ -5,10 +5,10 @@ use inkwell::{
     builder::Builder,
     context::Context,
     execution_engine::ExecutionEngine,
-    module::{Linkage, Module},
+    module::Module,
     passes::PassManager,
     targets::{CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetTriple},
-    types::{BasicMetadataTypeEnum, BasicType},
+    types::BasicType,
     values::{BasicValueEnum, FunctionValue, PointerValue},
     IntPredicate, OptimizationLevel,
 };

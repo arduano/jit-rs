@@ -1,15 +1,7 @@
-use inkwell::context::Context;
-
 use macros::jit_quote;
-use syntax::Function;
 
-use crate::build_ctx::GlobalCtx;
 use crate::codegen::LlvmCodegen;
 use crate::mir::mir_parse_module;
-use crate::syntax::{
-    BodyStatement, BodyStatementKind, ConstantValue, Expression, Type, VariableDeclare,
-};
-use crate::types::IntrinsicValueType;
 
 mod build_ctx;
 mod codegen;

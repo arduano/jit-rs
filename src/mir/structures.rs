@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use super::{blocks::MirBlockId, MirIntrinsicBinaryOp, MirIntrinsicType, MirLiteral};
+use super::{MirIntrinsicBinaryOp, MirIntrinsicType, MirLiteral};
 
 #[derive(Debug, Clone)]
 pub struct MirModule {

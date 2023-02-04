@@ -1,11 +1,10 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use inkwell::{
-    attributes::{self, Attribute, AttributeLoc},
     builder::Builder,
     context::Context,
     execution_engine::ExecutionEngine,
-    module::{Linkage, Module},
+    module::Module,
     passes::PassManager,
     targets::{CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetTriple},
     types::{BasicType, BasicTypeEnum},

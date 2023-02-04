@@ -1,6 +1,6 @@
 use std::{borrow::Cow, collections::HashMap};
 
-use super::{MirReadVariable, MirType, MirVariable, MirVariableDeclare};
+use super::{MirType, MirVariable, MirVariableDeclare};
 
 #[derive(Debug, Clone)]
 pub struct MirVariableDecl {
