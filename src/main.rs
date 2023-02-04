@@ -1,56 +1,76 @@
 use inkwell::context::Context;
 
+use macros::jit_quote;
 use syntax::Function;
 
 use crate::build_ctx::GlobalCtx;
+use crate::codegen::LlvmCodegen;
+use crate::mir::mir_parse_module;
 use crate::syntax::{
     BodyStatement, BodyStatementKind, ConstantValue, Expression, Type, VariableDeclare,
 };
 use crate::types::IntrinsicValueType;
 
 mod build_ctx;
-mod counter;
+mod codegen;
+mod macro_builder;
+mod mir;
 mod syntax;
 mod tokens;
+mod tree_parser;
 mod types;
 
+use macro_builder::*;
+use tree_parser::*;
+
 fn main() {
-    let ctx = GlobalCtx::new(Context::create());
-    let module = ctx.new_module("main");
-
-    use Expression as E;
-
-    let function = Function {
-        name: "main".to_string(),
-        args: vec![
-            VariableDeclare::new("a", IntrinsicValueType::U32),
-            VariableDeclare::new("b", IntrinsicValueType::U32),
-            VariableDeclare::new("c", IntrinsicValueType::U32),
-            VariableDeclare::new("d", IntrinsicValueType::U32),
-        ],
-        ret_type: Type::new(IntrinsicValueType::Bool),
-        body: vec![BodyStatement {
-            kind: BodyStatementKind::Return(E::lt(
-                E::add(E::read_var("a"), E::mul(E::read_var("b"), E::read_var("c"))),
-                E::constant(ConstantValue::U32(50)),
-            )),
-        }],
+    let tokens = jit_quote! {
+        pub fn test(arg: u32) -> u32 {
+            let test = arg;
+            return if arg < 10u32 {
+                if arg > 5u32 {
+                    51u32
+                } else {
+                    10u32
+                }
+            } else {
+                50u32
+            }
+        }
     };
 
-    module.add_function(&function);
-    module.optimize();
+    let tree = parse_tokens_to_tree(&tokens);
 
+    println!("{:#?}", &tokens);
+    println!("{:#?}", &tree);
+
+    let module = mir_parse_module(&tree.unwrap()).unwrap();
+    dbg!(&module);
+
+    let mut ctx = LlvmCodegen::new();
+    let module = ctx.insert_module(&module);
+
+    dbg!("fns");
+    module.print_functions();
+    dbg!("optimizing");
+    module.optimize();
+    dbg!("optimized");
     module.print_functions();
 
+    dbg!("writing to file");
     module.write_to_file();
 
-    let jit = module.execution_engine();
+    dbg!("running");
+
+    let engine = module.execution_engine();
+
     let compiled = unsafe {
-        jit.get_function::<unsafe extern "C" fn(u32, u32, u32) -> bool>("main")
+        engine
+            .get_function::<unsafe extern "C" fn(u32) -> u32>("test")
             .unwrap()
     };
 
-    unsafe {
-        dbg!(compiled.call(1, 10, 5));
-    }
+    println!("Result: {}", unsafe { compiled.call(1) });
+
+    return;
 }

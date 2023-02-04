@@ -13,7 +13,7 @@ pub struct VariableDeclare {
 pub struct Function {
     pub name: String,
     pub args: Vec<VariableDeclare>,
-    pub ret_type: Type,
+    pub ret_type: Option<Type>,
     pub body: Vec<BodyStatement>,
 }
 
@@ -25,15 +25,25 @@ pub struct BodyStatement {
 #[derive(Debug, Clone)]
 pub enum BodyStatementKind {
     Return(Expression),
+    Expr(Expression),
 }
 
 #[derive(Debug, Clone)]
 pub enum Expression {
+    FnCall {
+        name: String,
+        args: Vec<Expression>,
+    },
     ConstantValue(ConstantValue),
     BinaryMathOp(BinaryMathOp),
     ComparisonOp(ComparisonOp),
     SingleOp(SingleOp),
     ReadVar(String),
+    If {
+        cond: Box<Expression>,
+        then: Vec<BodyStatement>,
+        else_: Vec<BodyStatement>,
+    },
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -124,6 +134,13 @@ impl Expression {
             op,
             expr: Box::new(expr),
         })
+    }
+
+    pub fn call(name: impl Into<String>, args: Vec<Expression>) -> Self {
+        Expression::FnCall {
+            name: name.into(),
+            args,
+        }
     }
 
     pub fn add(lhs: Expression, rhs: Expression) -> Self {
