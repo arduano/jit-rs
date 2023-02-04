@@ -16,10 +16,6 @@ impl TreeBinaryOpSlice {
         (expr, op)
     }
 
-    fn peek_op(&mut self) -> TreeBinaryOpKind {
-        self.list.pairs[0].1
-    }
-
     fn is_empty(&self) -> bool {
         self.list.pairs.is_empty()
     }
@@ -153,15 +149,123 @@ fn seal_mir_parse_binary_expr(
                 }
             }
         }
-        TreeBinaryOpKind::Add => todo!(),
-        TreeBinaryOpKind::Sub => todo!(),
-        TreeBinaryOpKind::Mul => todo!(),
-        TreeBinaryOpKind::Div => todo!(),
-        TreeBinaryOpKind::Mod => todo!(),
-        TreeBinaryOpKind::Eq => todo!(),
-        TreeBinaryOpKind::Neq => todo!(),
-        TreeBinaryOpKind::And => todo!(),
-        TreeBinaryOpKind::Or => todo!(),
+        TreeBinaryOpKind::Eq => {
+            if &left.ty != &right.ty {
+                return Err(());
+            } else {
+                if is_float_type(&left.ty) {
+                    MirIntrinsicBinaryOp::FloatEq
+                } else if is_int_type(&left.ty) {
+                    MirIntrinsicBinaryOp::IntEq
+                } else {
+                    return Err(());
+                }
+            }
+        }
+        TreeBinaryOpKind::Neq => {
+            if &left.ty != &right.ty {
+                return Err(());
+            } else {
+                if is_float_type(&left.ty) {
+                    MirIntrinsicBinaryOp::FloatNeq
+                } else if is_int_type(&left.ty) {
+                    MirIntrinsicBinaryOp::IntNeq
+                } else {
+                    return Err(());
+                }
+            }
+        }
+        TreeBinaryOpKind::Add => {
+            if &left.ty != &right.ty {
+                return Err(());
+            } else {
+                if is_float_type(&left.ty) {
+                    MirIntrinsicBinaryOp::FloatAdd
+                } else if is_int_type(&left.ty) {
+                    MirIntrinsicBinaryOp::IntAdd
+                } else {
+                    return Err(());
+                }
+            }
+        }
+        TreeBinaryOpKind::Sub => {
+            if &left.ty != &right.ty {
+                return Err(());
+            } else {
+                if is_float_type(&left.ty) {
+                    MirIntrinsicBinaryOp::FloatSub
+                } else if is_int_type(&left.ty) {
+                    MirIntrinsicBinaryOp::IntSub
+                } else {
+                    return Err(());
+                }
+            }
+        }
+        TreeBinaryOpKind::Mul => {
+            if &left.ty != &right.ty {
+                return Err(());
+            } else {
+                if is_float_type(&left.ty) {
+                    MirIntrinsicBinaryOp::FloatMul
+                } else if is_int_type(&left.ty) {
+                    MirIntrinsicBinaryOp::IntMul
+                } else {
+                    return Err(());
+                }
+            }
+        }
+        TreeBinaryOpKind::Div => {
+            if &left.ty != &right.ty {
+                return Err(());
+            } else {
+                if is_float_type(&left.ty) {
+                    MirIntrinsicBinaryOp::FloatDiv
+                } else if is_uint_type(&left.ty) {
+                    MirIntrinsicBinaryOp::UIntDiv
+                } else if is_sint_type(&left.ty) {
+                    MirIntrinsicBinaryOp::IntDiv
+                } else {
+                    return Err(());
+                }
+            }
+        }
+        TreeBinaryOpKind::Mod => {
+            if &left.ty != &right.ty {
+                return Err(());
+            } else {
+                if is_float_type(&left.ty) {
+                    MirIntrinsicBinaryOp::FloatRem
+                } else if is_uint_type(&left.ty) {
+                    MirIntrinsicBinaryOp::UIntRem
+                } else if is_sint_type(&left.ty) {
+                    MirIntrinsicBinaryOp::IntRem
+                } else {
+                    return Err(());
+                }
+            }
+        }
+        TreeBinaryOpKind::And => {
+            if &left.ty != &right.ty {
+                return Err(());
+            } else {
+                if is_int_type(&left.ty) {
+                    MirIntrinsicBinaryOp::IntAnd
+                } else {
+                    return Err(());
+                }
+            }
+        }
+        TreeBinaryOpKind::Or => {
+            if &left.ty != &right.ty {
+                return Err(());
+            } else {
+                if is_int_type(&left.ty) {
+                    MirIntrinsicBinaryOp::IntOr
+                } else {
+                    return Err(());
+                }
+            }
+        }
     };
 
     Ok(MirExpression {

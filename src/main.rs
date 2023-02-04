@@ -3,14 +3,11 @@ use macros::jit_quote;
 use crate::codegen::LlvmCodegen;
 use crate::mir::mir_parse_module;
 
-mod build_ctx;
+// mod build_ctx;
 mod codegen;
 mod macro_builder;
 mod mir;
-mod syntax;
-mod tokens;
 mod tree_parser;
-mod types;
 
 use macro_builder::*;
 use tree_parser::*;

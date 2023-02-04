@@ -400,7 +400,7 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
                             )
                             .into(),
                     ),
-                    MirIntrinsicBinaryOp::IntNe => Some(
+                    MirIntrinsicBinaryOp::IntNeq => Some(
                         builder
                             .build_int_compare(
                                 IntPredicate::NE,
@@ -496,7 +496,7 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
                     MirIntrinsicBinaryOp::FloatDiv => todo!(),
                     MirIntrinsicBinaryOp::FloatRem => todo!(),
                     MirIntrinsicBinaryOp::FloatEq => todo!(),
-                    MirIntrinsicBinaryOp::FloatNe => todo!(),
+                    MirIntrinsicBinaryOp::FloatNeq => todo!(),
                     MirIntrinsicBinaryOp::FloatLt => todo!(),
                     MirIntrinsicBinaryOp::FloatLte => todo!(),
                     MirIntrinsicBinaryOp::FloatGt => todo!(),
