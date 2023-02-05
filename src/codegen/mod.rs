@@ -524,7 +524,7 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
                 let value = value.into_pointer_value();
                 let index = index.into_int_value();
 
-                let pointee_ty = self.get_type(&expr.ty);
+                let pointee_ty = self.get_type(&expr.ty.deref_ptr());
 
                 let ptr = unsafe {
                     self.module

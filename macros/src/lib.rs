@@ -90,6 +90,7 @@ impl Parse for Mapper {
                 try_basic!(<=, LessEqual);
                 try_basic!(>=, GreaterEqual);
                 try_basic!(!=, NotEqual);
+                try_basic!(==, DoubleEqual);
             }
 
             let Some(res) = res else {

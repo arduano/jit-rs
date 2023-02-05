@@ -64,6 +64,7 @@ pub enum JitBasicToken {
     Semicolon,
     Return,
     Let,
+    DoubleEqual,
     Equal,
     Pipe,
     Ampersand,
@@ -228,6 +229,7 @@ impl std::fmt::Display for JitTokenTreePrinter<'_> {
                     JitBasicToken::NotEqual => write!(f, "!=")?,
                     JitBasicToken::LessEqual => write!(f, "<=")?,
                     JitBasicToken::GreaterEqual => write!(f, ">=")?,
+                    JitBasicToken::DoubleEqual => write!(f, "==")?,
                 },
             }
 

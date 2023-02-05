@@ -226,20 +226,16 @@ fn mir_parse_expression(
             }
         }
         TreeExpressionKind::PtrAssign(statement) => {
-            if pos != ExprLocation::Root {
-                panic!("Var assign statements can only be used at the root of an expression");
-            } else {
-                let ptr = mir_parse_expression(&statement.ptr, ctx, ExprLocation::PtrAssign)?;
-                let value = mir_parse_expression(&statement.value, ctx, ExprLocation::Other)?;
+            let ptr = mir_parse_expression(&statement.ptr, ctx, ExprLocation::PtrAssign)?;
+            let value = mir_parse_expression(&statement.value, ctx, ExprLocation::Other)?;
 
-                let assign = MirPtrAssign { ptr, value };
-                let assign = MirStatement {
-                    kind: MirStatementKind::PtrAssign(assign),
-                };
-                ctx.blocks.add_statement(assign);
+            let assign = MirPtrAssign { ptr, value };
+            let assign = MirStatement {
+                kind: MirStatementKind::PtrAssign(assign),
+            };
+            ctx.blocks.add_statement(assign);
 
-                mir_make_empty_expr()
-            }
+            mir_make_empty_expr()
         }
         TreeExpressionKind::Number(num) => {
             use JitTokenFloatBits as FB;
@@ -358,7 +354,6 @@ fn mir_parse_expression(
 }
 
 fn mir_deref_expr(expr: MirExpression, ctx: &mut MirExpressionContext) -> MirExpression {
-    dbg!(expr.ty.deref_ptr());
     MirExpression {
         ty: expr.ty.deref_ptr().clone(),
         kind: MirExpressionKind::PtrDeref(Box::new(MirPtrDeref { ptr: expr })),

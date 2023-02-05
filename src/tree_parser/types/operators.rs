@@ -37,7 +37,7 @@ impl TreeBinaryOpKind {
                     JitBasicToken::Percent => Ok(Self::Mod),
                     JitBasicToken::LeftAngBracket => Ok(Self::Lt),
                     JitBasicToken::RightAngBracket => Ok(Self::Gt),
-                    JitBasicToken::Equal => Ok(Self::Eq),
+                    JitBasicToken::DoubleEqual => Ok(Self::Eq),
                     JitBasicToken::NotEqual => Ok(Self::Neq),
                     JitBasicToken::LessEqual => Ok(Self::Lte),
                     JitBasicToken::GreaterEqual => Ok(Self::Gte),
