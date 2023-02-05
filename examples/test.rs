@@ -18,7 +18,7 @@ fn main() {
         }
     };
 
-    println!("{:#?}", &tokens);
+    println!("{}", &tokens);
 
     let tree = parse_tokens_to_tree(&tokens);
 
