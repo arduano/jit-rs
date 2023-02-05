@@ -57,18 +57,6 @@ impl<'a, T> ParseResult<'a, T> {
     }
 }
 
-pub trait TreeParseItem: Sized {
-    const KIND: &'static str;
-
-    fn parse<'a>(cursor: ParseCursor<'a>) -> ParseResult<'a, Self>;
-
-    fn make_no_match() -> ParseResult<'static, Self> {
-        ParseResult::NoMatch {
-            expected: Self::KIND,
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct ParseCursor<'a> {
     tokens: &'a JitTokenTree,

@@ -196,7 +196,6 @@ fn parse_lit_float(input: ParseStream) -> syn::Result<proc_macro2::TokenStream> 
 }
 
 fn parse_lit_bool(input: ParseStream) -> syn::Result<proc_macro2::TokenStream> {
-    let span = input.span();
     let token: LitBool = input.parse()?;
 
     let value = token.value;

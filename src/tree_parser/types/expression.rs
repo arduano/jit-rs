@@ -2,7 +2,7 @@ use crate::{
     macro_builder::{JitBasicToken, JitGroupKind, JitToken, JitTokenKind},
     tree_parser::{
         macros::{get_required_val, ident_or_error, pass_val},
-        parser::{ParseCursor, ParseResult, TreeParseItem},
+        parser::{ParseCursor, ParseResult},
     },
 };
 

@@ -2,7 +2,7 @@ use crate::{
     macro_builder::{JitBasicToken, JitGroupKind},
     tree_parser::{
         macros::{get_required_val, pass_val},
-        parser::{ParseCursor, ParseResult, TreeParseItem},
+        parser::{ParseCursor, ParseResult},
     },
 };
 
@@ -15,12 +15,12 @@ pub struct TreeIfStatement {
     pub else_: Option<TreeBody>,
 }
 
-impl TreeParseItem for TreeIfStatement {
+impl TreeIfStatement {
     const KIND: &'static str = "if statement";
 
-    fn parse<'a>(mut cursor: ParseCursor<'a>) -> ParseResult<'a, Self> {
+    pub fn parse<'a>(mut cursor: ParseCursor<'a>) -> ParseResult<'a, Self> {
         if !cursor.parse_next_basic(JitBasicToken::If) {
-            return Self::make_no_match();
+            return ParseResult::no_match(Self::KIND);
         }
 
         let cond = get_required_val!(cursor, TreeExpression::parse(cursor, ExprLocation::Other));

@@ -11,8 +11,6 @@ pub struct TreeBody {
 }
 
 impl TreeBody {
-    const KIND: &'static str = "body";
-
     pub fn parse<'a>(mut cursor: ParseCursor<'a>) -> ParseResult<'a, Self> {
         let mut body = Vec::new();
 

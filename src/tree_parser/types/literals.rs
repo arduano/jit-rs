@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use crate::{
     macro_builder::{JitToken, JitTokenKind, JitTokenNumberKind},
-    tree_parser::parser::{ParseCursor, ParseResult, TreeParseItem},
+    tree_parser::parser::{ParseCursor, ParseResult},
 };
 
 #[derive(Debug, Clone)]
