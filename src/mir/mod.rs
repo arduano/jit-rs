@@ -4,8 +4,6 @@ mod intrinsics;
 mod structures;
 mod variables;
 
-use std::any::Any;
-
 pub use intrinsics::*;
 pub use structures::*;
 

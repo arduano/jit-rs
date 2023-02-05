@@ -1,7 +1,6 @@
 use jit_rs::macro_builder::*;
 use macros::jit_quote;
 use std::hint::black_box;
-use std::sync::Arc;
 
 use criterion::criterion_group;
 use criterion::criterion_main;
