@@ -3,7 +3,7 @@ use crate::tree_parser::{
     parser::{ParseCursor, ParseResult},
 };
 
-use super::{TreeExpression, ExprLocation};
+use super::{ExprLocation, TreeExpression};
 
 #[derive(Debug, Clone)]
 pub struct TreeBody {

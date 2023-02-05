@@ -188,7 +188,7 @@ fn mir_parse_expression(
     ctx: &mut MirExpressionContext,
     pos: ExprLocation,
 ) -> Result<MirExpression, ()> {
-    let mut value = match &expr.kind {
+    let value = match &expr.kind {
         TreeExpressionKind::IfStatement(statement) => {
             let cond = mir_parse_expression(&statement.cond, ctx, ExprLocation::Other)?;
             mir_insert_condition(cond, &statement.then, statement.else_.as_ref(), ctx)?
@@ -353,7 +353,7 @@ fn mir_parse_expression(
     Ok(value)
 }
 
-fn mir_deref_expr(expr: MirExpression, ctx: &mut MirExpressionContext) -> MirExpression {
+fn mir_deref_expr(expr: MirExpression, _ctx: &mut MirExpressionContext) -> MirExpression {
     MirExpression {
         ty: expr.ty.deref_ptr().clone(),
         kind: MirExpressionKind::PtrDeref(Box::new(MirPtrDeref { ptr: expr })),

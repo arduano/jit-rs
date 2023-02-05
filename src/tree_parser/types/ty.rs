@@ -34,7 +34,7 @@ impl TreeType {
 
         if let Some(JitToken {
             kind: JitTokenKind::Ident(name),
-            span,
+            span: _,
         }) = token
         {
             ParseResult::Ok(cursor, Self::Base(BaseTreeType { name: name.clone() }))

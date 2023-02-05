@@ -36,7 +36,7 @@ macro_rules! ident_or_error {
     ($cursor:ident, $err:expr) => {
         if let Some(JitToken {
             kind: JitTokenKind::Ident(name),
-            span,
+            span: _,
         }) = $cursor.next()
         {
             name

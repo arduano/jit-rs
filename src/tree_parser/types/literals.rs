@@ -19,7 +19,7 @@ impl TreeNumberLiteral {
 
         if let Some(JitToken {
             kind: JitTokenKind::Number(ty, str),
-            span,
+            span: _,
         }) = token
         {
             ParseResult::Ok(
@@ -48,7 +48,7 @@ impl TreeBoolLiteral {
 
         if let Some(JitToken {
             kind: JitTokenKind::Bool(val),
-            span,
+            span: _,
         }) = token
         {
             ParseResult::Ok(cursor, Self { value: *val })

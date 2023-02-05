@@ -28,7 +28,7 @@ impl TreeBinaryOpKind {
         let next = cursor.peek(0);
 
         let op = match next {
-            Some(JitToken { kind, span }) => match kind {
+            Some(JitToken { kind, span: _ }) => match kind {
                 JitTokenKind::Basic(basic) => match basic {
                     JitBasicToken::Plus => Ok(Self::Add),
                     JitBasicToken::Minus => Ok(Self::Sub),
@@ -73,7 +73,7 @@ impl TreeUnaryOpKind {
         let next = cursor.peek(0);
 
         let op = match next {
-            Some(JitToken { kind, span }) => match kind {
+            Some(JitToken { kind, span: _ }) => match kind {
                 JitTokenKind::Basic(basic) => match basic {
                     JitBasicToken::Minus => Ok(Self::Neg),
                     _ => Err(ParseResult::no_match(Self::KIND)),

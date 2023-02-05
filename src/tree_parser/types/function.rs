@@ -22,7 +22,7 @@ impl TreeFunction {
     const KIND: &'static str = "function";
 
     pub fn parse<'a>(mut cursor: ParseCursor<'a>) -> ParseResult<'a, Self> {
-        let is_pub = cursor.parse_next_basic(JitBasicToken::Pub);
+        let _is_pub = cursor.parse_next_basic(JitBasicToken::Pub);
 
         if !cursor.parse_next_basic(JitBasicToken::Fn) {
             return ParseResult::no_match(Self::KIND);

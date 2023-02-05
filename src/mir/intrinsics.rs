@@ -1,5 +1,3 @@
-use super::MirType;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MirIntrinsicBinaryOp {
     IntAdd,

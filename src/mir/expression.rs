@@ -1,7 +1,4 @@
-use super::{
-    variables::MirVariableDecl, MirIntrinsicBinaryOp, MirLiteral, MirType, MirVariable,
-    MirVariableDeclare,
-};
+use super::{variables::MirVariableDecl, MirIntrinsicBinaryOp, MirLiteral, MirType, MirVariable};
 
 #[derive(Debug, Clone)]
 pub struct MirExpression {

@@ -207,7 +207,7 @@ impl TreeVarRead {
     pub fn parse<'a>(mut cursor: ParseCursor<'a>) -> ParseResult<'a, Self> {
         if let Some(JitToken {
             kind: JitTokenKind::Ident(name),
-            span,
+            span: _,
         }) = cursor.next()
         {
             ParseResult::Ok(cursor, Self { name: name.clone() })
