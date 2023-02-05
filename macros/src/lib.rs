@@ -64,15 +64,20 @@ impl Parse for Mapper {
                 try_basic!(., Dot);
                 try_basic!(->, Arrow);
                 try_basic!(return, Return);
+                try_basic!(loop, Loop);
+                try_basic!(while, While);
                 try_basic!(let, Let);
                 try_basic!(=, Equal);
                 try_basic!(+, Plus);
                 try_basic!(-, Minus);
                 try_basic!(*, Star);
                 try_basic!(/, Slash);
+                try_basic!(^, Caret);
                 try_basic!(%, Percent);
-                try_basic!(<, LeftBracket);
-                try_basic!(>, RightBracket);
+                try_basic!(|, Pipe);
+                try_basic!(&, And);
+                try_basic!(<, LeftAngBracket);
+                try_basic!(>, RightAngBracket);
             }
 
             let Some(res) = res else {

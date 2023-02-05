@@ -5,12 +5,13 @@ use inkwell::{
     builder::Builder,
     context::Context,
     execution_engine::ExecutionEngine,
+    memory_buffer::MemoryBuffer,
     module::Module,
     passes::PassManager,
     targets::{CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetTriple},
     types::BasicType,
     values::{BasicValueEnum, FunctionValue, PointerValue},
-    IntPredicate, OptimizationLevel,
+    AddressSpace, IntPredicate, OptimizationLevel,
 };
 
 use crate::mir::*;
@@ -53,6 +54,8 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
     pub fn optimize(&self) {
         let pass_manager = PassManager::<Module>::create(());
 
+        pass_manager.add_function_attrs_pass();
+        pass_manager.add_demote_memory_to_register_pass();
         pass_manager.add_type_based_alias_analysis_pass();
         pass_manager.add_basic_alias_analysis_pass();
         pass_manager.add_correlated_value_propagation_pass();
@@ -60,6 +63,7 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
         pass_manager.add_aggressive_dce_pass();
         pass_manager.add_aggressive_inst_combiner_pass();
         pass_manager.add_bit_tracking_dce_pass();
+        pass_manager.add_reassociate_pass();
         pass_manager.add_gvn_pass();
         pass_manager.add_tail_call_elimination_pass();
         pass_manager.add_function_inlining_pass();
@@ -67,15 +71,25 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
         pass_manager.add_loop_deletion_pass();
         pass_manager.add_loop_idiom_pass();
         pass_manager.add_loop_vectorize_pass();
-        pass_manager.add_loop_rotate_pass();
-        pass_manager.add_loop_unroll_pass();
-        pass_manager.add_ind_var_simplify_pass();
-        pass_manager.add_global_optimizer_pass();
-        pass_manager.add_dead_arg_elimination_pass();
-        pass_manager.add_cfg_simplification_pass();
-        pass_manager.add_dead_store_elimination_pass();
         pass_manager.add_instruction_combining_pass();
         pass_manager.add_instruction_simplify_pass();
+        pass_manager.add_loop_rotate_pass();
+        pass_manager.add_loop_unroll_pass();
+        pass_manager.add_lower_switch_pass();
+        pass_manager.add_ind_var_simplify_pass();
+        pass_manager.add_instruction_simplify_pass();
+        pass_manager.add_global_optimizer_pass();
+        pass_manager.add_dead_arg_elimination_pass();
+        pass_manager.add_dead_store_elimination_pass();
+        pass_manager.add_global_dce_pass();
+        pass_manager.add_aggressive_dce_pass();
+        pass_manager.add_bit_tracking_dce_pass();
+        pass_manager.add_cfg_simplification_pass();
+        pass_manager.add_gvn_pass();
+        pass_manager.add_licm_pass();
+        pass_manager.add_gvn_pass();
+        pass_manager.add_cfg_simplification_pass();
+        pass_manager.add_correlated_value_propagation_pass();
 
         pass_manager.run_on(&self.module);
     }
@@ -135,7 +149,7 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
     fn get_type(&self, ty: &MirType) -> inkwell::types::BasicTypeEnum<'ctx> {
         use MirIntrinsicType as IT;
 
-        match ty.kind {
+        match &ty.kind {
             MirTypeKind::Intrinsic(ty) => match ty {
                 IT::I8 => self.context.i8_type().into(),
                 IT::I16 => self.context.i16_type().into(),
@@ -150,6 +164,7 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
                 IT::Bool => self.context.bool_type().into(),
                 IT::Void => panic!("Unexpected void type"),
                 IT::Never => panic!("Unexpected never type"),
+                IT::Ptr(ty) => self.get_type(ty).ptr_type(AddressSpace::default()).into(),
             },
         }
     }
@@ -502,6 +517,25 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
                     MirIntrinsicBinaryOp::FloatGt => todo!(),
                     MirIntrinsicBinaryOp::FloatGte => todo!(),
                 }
+            }
+            MirExpressionKind::IndexPtr(index) => {
+                let value = self.write_expression(&index.value).unwrap();
+                let index = self.write_expression(&index.index).unwrap();
+
+                let value = value.into_pointer_value();
+                let index = index.into_int_value();
+
+                let pointee_ty = self.get_type(&expr.ty);
+
+                let ptr = unsafe {
+                    self.module
+                        .builder
+                        .build_gep(pointee_ty, value, &[index], "index")
+                };
+
+                let val = self.module.builder.build_load(pointee_ty, ptr, "read");
+
+                Some(val)
             }
         }
     }

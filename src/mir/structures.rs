@@ -27,12 +27,12 @@ pub struct MirFunctionArg {
     pub ty: MirType,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct MirType {
     pub kind: MirTypeKind,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum MirTypeKind {
     Intrinsic(MirIntrinsicType),
 }
@@ -69,6 +69,7 @@ pub struct MirExpression {
 #[derive(Debug, Clone)]
 pub enum MirExpressionKind {
     ReadArg(MirReadArg),
+    IndexPtr(Box<MirIndexPtr>),
     ReadVariable(MirReadVariable),
     Literal(MirLiteral),
     BinaryOp(Box<MirBinaryOp>),
@@ -99,6 +100,12 @@ pub struct MirReadVariable {
 #[derive(Debug, Clone)]
 pub struct MirReadArg {
     pub index: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct MirIndexPtr {
+    pub value: MirExpression,
+    pub index: MirExpression,
 }
 
 #[derive(Debug, Clone)]

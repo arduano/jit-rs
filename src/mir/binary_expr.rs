@@ -78,8 +78,9 @@ fn mir_op_precedence(op: TreeBinaryOpKind) -> u32 {
         TreeBinaryOpKind::Neq => 4,
         TreeBinaryOpKind::Lte => 3,
         TreeBinaryOpKind::Gte => 3,
-        TreeBinaryOpKind::And => 5,
-        TreeBinaryOpKind::Or => 6,
+        TreeBinaryOpKind::BinaryAnd => 3,
+        TreeBinaryOpKind::BinaryOr => 3,
+        TreeBinaryOpKind::BinaryXor => 3,
     }
 }
 
@@ -88,8 +89,12 @@ fn seal_mir_parse_binary_expr(
     op: TreeBinaryOpKind,
     right: MirExpression,
 ) -> Result<MirExpression, ()> {
-    let op = match op {
-        TreeBinaryOpKind::Lt => {
+    let bool_ty = MirType {
+        kind: MirTypeKind::Intrinsic(MirIntrinsicType::Bool),
+    };
+
+    let (op, ty) = match op {
+        TreeBinaryOpKind::Lt => (
             if &left.ty != &right.ty {
                 return Err(());
             } else {
@@ -102,9 +107,10 @@ fn seal_mir_parse_binary_expr(
                 } else {
                     return Err(());
                 }
-            }
-        }
-        TreeBinaryOpKind::Gt => {
+            },
+            bool_ty,
+        ),
+        TreeBinaryOpKind::Gt => (
             if &left.ty != &right.ty {
                 return Err(());
             } else {
@@ -117,159 +123,207 @@ fn seal_mir_parse_binary_expr(
                 } else {
                     return Err(());
                 }
-            }
-        }
-        TreeBinaryOpKind::Lte => {
-            if &left.ty != &right.ty {
-                return Err(());
-            } else {
-                if is_float_type(&left.ty) {
-                    MirIntrinsicBinaryOp::FloatLte
-                } else if is_uint_type(&left.ty) {
-                    MirIntrinsicBinaryOp::UIntLte
-                } else if is_sint_type(&left.ty) {
-                    MirIntrinsicBinaryOp::IntLte
-                } else {
+            },
+            bool_ty,
+        ),
+        TreeBinaryOpKind::Lte => (
+            {
+                if &left.ty != &right.ty {
                     return Err(());
-                }
-            }
-        }
-        TreeBinaryOpKind::Gte => {
-            if &left.ty != &right.ty {
-                return Err(());
-            } else {
-                if is_float_type(&left.ty) {
-                    MirIntrinsicBinaryOp::FloatGte
-                } else if is_uint_type(&left.ty) {
-                    MirIntrinsicBinaryOp::UIntGte
-                } else if is_sint_type(&left.ty) {
-                    MirIntrinsicBinaryOp::IntGte
                 } else {
-                    return Err(());
+                    if is_float_type(&left.ty) {
+                        MirIntrinsicBinaryOp::FloatLte
+                    } else if is_uint_type(&left.ty) {
+                        MirIntrinsicBinaryOp::UIntLte
+                    } else if is_sint_type(&left.ty) {
+                        MirIntrinsicBinaryOp::IntLte
+                    } else {
+                        return Err(());
+                    }
                 }
-            }
-        }
-        TreeBinaryOpKind::Eq => {
-            if &left.ty != &right.ty {
-                return Err(());
-            } else {
-                if is_float_type(&left.ty) {
-                    MirIntrinsicBinaryOp::FloatEq
-                } else if is_int_type(&left.ty) {
-                    MirIntrinsicBinaryOp::IntEq
+            },
+            bool_ty,
+        ),
+        TreeBinaryOpKind::Gte => (
+            {
+                if &left.ty != &right.ty {
+                    return Err(());
                 } else {
-                    return Err(());
+                    if is_float_type(&left.ty) {
+                        MirIntrinsicBinaryOp::FloatGte
+                    } else if is_uint_type(&left.ty) {
+                        MirIntrinsicBinaryOp::UIntGte
+                    } else if is_sint_type(&left.ty) {
+                        MirIntrinsicBinaryOp::IntGte
+                    } else {
+                        return Err(());
+                    }
                 }
-            }
-        }
-        TreeBinaryOpKind::Neq => {
-            if &left.ty != &right.ty {
-                return Err(());
-            } else {
-                if is_float_type(&left.ty) {
-                    MirIntrinsicBinaryOp::FloatNeq
-                } else if is_int_type(&left.ty) {
-                    MirIntrinsicBinaryOp::IntNeq
+            },
+            bool_ty,
+        ),
+        TreeBinaryOpKind::Eq => (
+            {
+                if &left.ty != &right.ty {
+                    return Err(());
                 } else {
-                    return Err(());
+                    if is_float_type(&left.ty) {
+                        MirIntrinsicBinaryOp::FloatEq
+                    } else if is_int_type(&left.ty) {
+                        MirIntrinsicBinaryOp::IntEq
+                    } else {
+                        return Err(());
+                    }
                 }
-            }
-        }
-        TreeBinaryOpKind::Add => {
-            if &left.ty != &right.ty {
-                return Err(());
-            } else {
-                if is_float_type(&left.ty) {
-                    MirIntrinsicBinaryOp::FloatAdd
-                } else if is_int_type(&left.ty) {
-                    MirIntrinsicBinaryOp::IntAdd
+            },
+            bool_ty,
+        ),
+        TreeBinaryOpKind::Neq => (
+            {
+                if &left.ty != &right.ty {
+                    return Err(());
                 } else {
-                    return Err(());
+                    if is_float_type(&left.ty) {
+                        MirIntrinsicBinaryOp::FloatNeq
+                    } else if is_int_type(&left.ty) {
+                        MirIntrinsicBinaryOp::IntNeq
+                    } else {
+                        return Err(());
+                    }
                 }
-            }
-        }
-        TreeBinaryOpKind::Sub => {
-            if &left.ty != &right.ty {
-                return Err(());
-            } else {
-                if is_float_type(&left.ty) {
-                    MirIntrinsicBinaryOp::FloatSub
-                } else if is_int_type(&left.ty) {
-                    MirIntrinsicBinaryOp::IntSub
+            },
+            bool_ty,
+        ),
+        TreeBinaryOpKind::Add => (
+            {
+                if &left.ty != &right.ty {
+                    return Err(());
                 } else {
-                    return Err(());
+                    if is_float_type(&left.ty) {
+                        MirIntrinsicBinaryOp::FloatAdd
+                    } else if is_int_type(&left.ty) {
+                        MirIntrinsicBinaryOp::IntAdd
+                    } else {
+                        return Err(());
+                    }
                 }
-            }
-        }
-        TreeBinaryOpKind::Mul => {
-            if &left.ty != &right.ty {
-                return Err(());
-            } else {
-                if is_float_type(&left.ty) {
-                    MirIntrinsicBinaryOp::FloatMul
-                } else if is_int_type(&left.ty) {
-                    MirIntrinsicBinaryOp::IntMul
+            },
+            left.ty.clone(),
+        ),
+        TreeBinaryOpKind::Sub => (
+            {
+                if &left.ty != &right.ty {
+                    return Err(());
                 } else {
-                    return Err(());
+                    if is_float_type(&left.ty) {
+                        MirIntrinsicBinaryOp::FloatSub
+                    } else if is_int_type(&left.ty) {
+                        MirIntrinsicBinaryOp::IntSub
+                    } else {
+                        return Err(());
+                    }
                 }
-            }
-        }
-        TreeBinaryOpKind::Div => {
-            if &left.ty != &right.ty {
-                return Err(());
-            } else {
-                if is_float_type(&left.ty) {
-                    MirIntrinsicBinaryOp::FloatDiv
-                } else if is_uint_type(&left.ty) {
-                    MirIntrinsicBinaryOp::UIntDiv
-                } else if is_sint_type(&left.ty) {
-                    MirIntrinsicBinaryOp::IntDiv
+            },
+            left.ty.clone(),
+        ),
+        TreeBinaryOpKind::Mul => (
+            {
+                if &left.ty != &right.ty {
+                    return Err(());
                 } else {
-                    return Err(());
+                    if is_float_type(&left.ty) {
+                        MirIntrinsicBinaryOp::FloatMul
+                    } else if is_int_type(&left.ty) {
+                        MirIntrinsicBinaryOp::IntMul
+                    } else {
+                        return Err(());
+                    }
                 }
-            }
-        }
-        TreeBinaryOpKind::Mod => {
-            if &left.ty != &right.ty {
-                return Err(());
-            } else {
-                if is_float_type(&left.ty) {
-                    MirIntrinsicBinaryOp::FloatRem
-                } else if is_uint_type(&left.ty) {
-                    MirIntrinsicBinaryOp::UIntRem
-                } else if is_sint_type(&left.ty) {
-                    MirIntrinsicBinaryOp::IntRem
+            },
+            left.ty.clone(),
+        ),
+        TreeBinaryOpKind::Div => (
+            {
+                if &left.ty != &right.ty {
+                    return Err(());
                 } else {
-                    return Err(());
+                    if is_float_type(&left.ty) {
+                        MirIntrinsicBinaryOp::FloatDiv
+                    } else if is_uint_type(&left.ty) {
+                        MirIntrinsicBinaryOp::UIntDiv
+                    } else if is_sint_type(&left.ty) {
+                        MirIntrinsicBinaryOp::IntDiv
+                    } else {
+                        return Err(());
+                    }
                 }
-            }
-        }
-        TreeBinaryOpKind::And => {
-            if &left.ty != &right.ty {
-                return Err(());
-            } else {
-                if is_int_type(&left.ty) {
-                    MirIntrinsicBinaryOp::IntAnd
+            },
+            left.ty.clone(),
+        ),
+        TreeBinaryOpKind::Mod => (
+            {
+                if &left.ty != &right.ty {
+                    return Err(());
                 } else {
-                    return Err(());
+                    if is_float_type(&left.ty) {
+                        MirIntrinsicBinaryOp::FloatRem
+                    } else if is_uint_type(&left.ty) {
+                        MirIntrinsicBinaryOp::UIntRem
+                    } else if is_sint_type(&left.ty) {
+                        MirIntrinsicBinaryOp::IntRem
+                    } else {
+                        return Err(());
+                    }
                 }
-            }
-        }
-        TreeBinaryOpKind::Or => {
-            if &left.ty != &right.ty {
-                return Err(());
-            } else {
-                if is_int_type(&left.ty) {
-                    MirIntrinsicBinaryOp::IntOr
+            },
+            left.ty.clone(),
+        ),
+        TreeBinaryOpKind::BinaryAnd => (
+            {
+                if &left.ty != &right.ty {
+                    return Err(());
                 } else {
-                    return Err(());
+                    if is_int_type(&left.ty) {
+                        MirIntrinsicBinaryOp::IntAnd
+                    } else {
+                        return Err(());
+                    }
                 }
-            }
-        }
+            },
+            left.ty.clone(),
+        ),
+        TreeBinaryOpKind::BinaryOr => (
+            {
+                if &left.ty != &right.ty {
+                    return Err(());
+                } else {
+                    if is_int_type(&left.ty) {
+                        MirIntrinsicBinaryOp::IntOr
+                    } else {
+                        return Err(());
+                    }
+                }
+            },
+            left.ty.clone(),
+        ),
+        TreeBinaryOpKind::BinaryXor => (
+            {
+                if &left.ty != &right.ty {
+                    return Err(());
+                } else {
+                    if is_int_type(&left.ty) {
+                        MirIntrinsicBinaryOp::IntXor
+                    } else {
+                        return Err(());
+                    }
+                }
+            },
+            left.ty.clone(),
+        ),
     };
 
     Ok(MirExpression {
-        ty: left.ty.clone(),
+        ty,
         kind: MirExpressionKind::BinaryOp(Box::new(MirBinaryOp {
             op,
             lhs: left,
@@ -281,7 +335,7 @@ fn seal_mir_parse_binary_expr(
 fn is_float_type(ty: &MirType) -> bool {
     use MirIntrinsicType as IT;
 
-    match ty.kind {
+    match &ty.kind {
         MirTypeKind::Intrinsic(ty) => match ty {
             IT::F32 | IT::F64 => true,
             _ => false,
@@ -292,7 +346,7 @@ fn is_float_type(ty: &MirType) -> bool {
 fn is_uint_type(ty: &MirType) -> bool {
     use MirIntrinsicType as IT;
 
-    match ty.kind {
+    match &ty.kind {
         MirTypeKind::Intrinsic(ty) => match ty {
             IT::U8 | IT::U16 | IT::U32 | IT::U64 => true,
             _ => false,
@@ -303,7 +357,7 @@ fn is_uint_type(ty: &MirType) -> bool {
 fn is_sint_type(ty: &MirType) -> bool {
     use MirIntrinsicType as IT;
 
-    match ty.kind {
+    match &ty.kind {
         MirTypeKind::Intrinsic(ty) => match ty {
             IT::I8 | IT::I16 | IT::I32 | IT::I64 => true,
             _ => false,
@@ -313,4 +367,13 @@ fn is_sint_type(ty: &MirType) -> bool {
 
 fn is_int_type(ty: &MirType) -> bool {
     is_uint_type(ty) || is_sint_type(ty)
+}
+
+fn is_ptr_type(ty: &MirType) -> bool {
+    match &ty.kind {
+        MirTypeKind::Intrinsic(ty) => match ty {
+            MirIntrinsicType::Ptr(_) => true,
+            _ => false,
+        },
+    }
 }

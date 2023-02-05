@@ -4,6 +4,8 @@ mod intrinsics;
 mod structures;
 mod variables;
 
+use std::any::Any;
+
 pub use intrinsics::*;
 pub use structures::*;
 
@@ -133,7 +135,7 @@ fn mir_parse_type(ty: &TreeType) -> Result<MirType, ()> {
         }
     }
 
-    Ok(match ty.name.as_ref() {
+    let base = match ty.name.as_ref() {
         "u8" => intrinsic(MirIntrinsicType::U8),
         "u16" => intrinsic(MirIntrinsicType::U16),
         "u32" => intrinsic(MirIntrinsicType::U32),
@@ -148,7 +150,15 @@ fn mir_parse_type(ty: &TreeType) -> Result<MirType, ()> {
         _ => {
             panic!("Unsupported type: {}", ty.name);
         }
-    })
+    };
+
+    if ty.is_ptr {
+        Ok(MirType {
+            kind: MirTypeKind::Intrinsic(MirIntrinsicType::Ptr(Box::new(base))),
+        })
+    } else {
+        Ok(base)
+    }
 }
 
 fn mir_get_void_type() -> MirType {
@@ -178,90 +188,7 @@ fn mir_parse_expression(
     let mut value = match &expr.kind {
         TreeExpressionKind::IfStatement(statement) => {
             let cond = mir_parse_expression(&statement.cond, ctx, false)?;
-            let start_block = ctx.blocks.current_block().unwrap();
-
-            let then_block = ctx.blocks.add_block();
-            let else_block = ctx.blocks.add_block();
-
-            ctx.blocks.select_block(then_block);
-            let then_value = mir_parse_body(&statement.then, ctx)?;
-            let then_block_end = ctx.blocks.current_block().unwrap();
-
-            ctx.blocks.select_block(else_block);
-            let else_value = mir_parse_body(&statement.else_, ctx)?;
-            let else_block_end = ctx.blocks.current_block().unwrap();
-
-            if then_value.ty != else_value.ty {
-                panic!("If statement branches must return the same type");
-            }
-
-            let value = if !mir_is_empty_type(&then_value.ty) {
-                let ty = then_value.ty.clone();
-
-                // We don't do phi, so just jump around the blocks with a variable
-                ctx.blocks.select_block(start_block);
-
-                let var_decl = ctx.variables.declare_nameless(ty.clone());
-
-                ctx.blocks.select_block(then_block_end);
-                let assign = MirStatement {
-                    kind: MirStatementKind::VarAssign(MirVariableAssign {
-                        var: var_decl.as_var(),
-                        value: then_value,
-                    }),
-                };
-                ctx.blocks.add_statement(assign);
-
-                ctx.blocks.select_block(else_block_end);
-                let assign = MirStatement {
-                    kind: MirStatementKind::VarAssign(MirVariableAssign {
-                        var: var_decl.as_var(),
-                        value: else_value,
-                    }),
-                };
-                ctx.blocks.add_statement(assign);
-
-                MirExpression {
-                    ty,
-                    kind: MirExpressionKind::ReadVariable(MirReadVariable {
-                        var: var_decl.as_var(),
-                    }),
-                }
-            } else {
-                MirExpression {
-                    ty: then_value.ty,
-                    kind: MirExpressionKind::NoValue,
-                }
-            };
-
-            let end_block = ctx.blocks.add_block();
-
-            // Append all the jumps
-            ctx.blocks.select_block(start_block);
-            ctx.blocks.add_statement(MirStatement {
-                kind: MirStatementKind::ConditionalJump(MirConditionalJump {
-                    condition: cond,
-                    then_index: then_block.index,
-                    else_index: else_block.index,
-                }),
-            });
-
-            ctx.blocks.select_block(then_block_end);
-            ctx.blocks.add_statement(MirStatement {
-                kind: MirStatementKind::Jump(MirJump {
-                    index: end_block.index,
-                }),
-            });
-
-            ctx.blocks.select_block(else_block_end);
-            ctx.blocks.add_statement(MirStatement {
-                kind: MirStatementKind::Jump(MirJump {
-                    index: end_block.index,
-                }),
-            });
-
-            ctx.blocks.select_block(end_block);
-            value
+            mir_insert_condition(cond, &statement.then, statement.else_.as_ref(), ctx)?
         }
         TreeExpressionKind::LetStatement(statement) => {
             if !is_root {
@@ -353,11 +280,168 @@ fn mir_parse_expression(
             });
             mir_make_empty_expr()
         }
+        TreeExpressionKind::WhileStatement(statement) => {
+            let loop_start = ctx.blocks.add_block();
+            let end_block = ctx.blocks.add_block();
+            let loop_body = ctx.blocks.add_block();
+
+            let jump = MirStatement {
+                kind: MirStatementKind::Jump(MirJump {
+                    index: loop_start.index,
+                }),
+            };
+            ctx.blocks.add_statement(jump);
+
+            ctx.blocks.select_block(loop_start);
+            let cond = mir_parse_expression(&statement.cond, ctx, false)?;
+
+            let jump = MirStatement {
+                kind: MirStatementKind::ConditionalJump(MirConditionalJump {
+                    condition: cond,
+                    then_index: loop_body.index,
+                    else_index: end_block.index,
+                }),
+            };
+            ctx.blocks.add_statement(jump);
+
+            ctx.blocks.select_block(loop_body);
+            mir_parse_body(&statement.body, ctx)?;
+
+            let jump = MirStatement {
+                kind: MirStatementKind::Jump(MirJump {
+                    index: loop_start.index,
+                }),
+            };
+            ctx.blocks.add_statement(jump);
+
+            ctx.blocks.select_block(end_block);
+
+            mir_make_empty_expr()
+        }
+        TreeExpressionKind::Parenthesized(expr) => mir_parse_expression(&expr, ctx, is_root)?,
+        TreeExpressionKind::IndexOp(index) => {
+            let value = mir_parse_expression(&index.value, ctx, false)?;
+            let index = mir_parse_expression(&index.index, ctx, false)?;
+
+            match &index.ty.kind {
+                MirTypeKind::Intrinsic(MirIntrinsicType::U32) => {}
+                _ => panic!("Unexpected value type for index operation"),
+            }
+
+            let ty = match &value.ty.kind {
+                MirTypeKind::Intrinsic(MirIntrinsicType::Ptr(ty)) => ty,
+                _ => panic!("Unexpected value type for index operation"),
+            };
+
+            let value = MirExpression {
+                ty: ty.as_ref().clone(),
+                kind: MirExpressionKind::IndexPtr(Box::new(MirIndexPtr { value, index })),
+            };
+
+            value
+        }
     };
 
     if expr.has_semi {
         value.ty = mir_get_void_type();
     }
+
+    Ok(value)
+}
+
+fn mir_insert_condition(
+    cond: MirExpression,
+    then_tree: &TreeBody,
+    else_tree: Option<&TreeBody>,
+    ctx: &mut MirExpressionContext,
+) -> Result<MirExpression, ()> {
+    let start_block = ctx.blocks.current_block().unwrap();
+
+    let then_block = ctx.blocks.add_block();
+    let else_block = ctx.blocks.add_block();
+
+    ctx.blocks.select_block(then_block);
+    let then_value = mir_parse_body(then_tree, ctx)?;
+    let then_block_end = ctx.blocks.current_block().unwrap();
+
+    ctx.blocks.select_block(else_block);
+    let else_value = if let Some(else_tree) = else_tree {
+        mir_parse_body(else_tree, ctx)?
+    } else {
+        mir_make_empty_expr()
+    };
+    let else_block_end = ctx.blocks.current_block().unwrap();
+
+    if then_value.ty != else_value.ty {
+        panic!("If statement branches must return the same type");
+    }
+
+    let value = if !mir_is_empty_type(&then_value.ty) {
+        let ty = then_value.ty.clone();
+
+        // We don't do phi, so just jump around the blocks with a variable
+        ctx.blocks.select_block(start_block);
+
+        let var_decl = ctx.variables.declare_nameless(ty.clone());
+
+        ctx.blocks.select_block(then_block_end);
+        let assign = MirStatement {
+            kind: MirStatementKind::VarAssign(MirVariableAssign {
+                var: var_decl.as_var(),
+                value: then_value,
+            }),
+        };
+        ctx.blocks.add_statement(assign);
+
+        ctx.blocks.select_block(else_block_end);
+        let assign = MirStatement {
+            kind: MirStatementKind::VarAssign(MirVariableAssign {
+                var: var_decl.as_var(),
+                value: else_value,
+            }),
+        };
+        ctx.blocks.add_statement(assign);
+
+        MirExpression {
+            ty,
+            kind: MirExpressionKind::ReadVariable(MirReadVariable {
+                var: var_decl.as_var(),
+            }),
+        }
+    } else {
+        MirExpression {
+            ty: then_value.ty,
+            kind: MirExpressionKind::NoValue,
+        }
+    };
+
+    let end_block = ctx.blocks.add_block();
+
+    // Append all the jumps
+    ctx.blocks.select_block(start_block);
+    ctx.blocks.add_statement(MirStatement {
+        kind: MirStatementKind::ConditionalJump(MirConditionalJump {
+            condition: cond,
+            then_index: then_block.index,
+            else_index: else_block.index,
+        }),
+    });
+
+    ctx.blocks.select_block(then_block_end);
+    ctx.blocks.add_statement(MirStatement {
+        kind: MirStatementKind::Jump(MirJump {
+            index: end_block.index,
+        }),
+    });
+
+    ctx.blocks.select_block(else_block_end);
+    ctx.blocks.add_statement(MirStatement {
+        kind: MirStatementKind::Jump(MirJump {
+            index: end_block.index,
+        }),
+    });
+
+    ctx.blocks.select_block(end_block);
 
     Ok(value)
 }

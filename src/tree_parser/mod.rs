@@ -109,8 +109,6 @@ fn parse_module(cursor: &mut ParseCursor) -> Result<TreeModule, ParseError> {
 }
 
 fn parse_function(cursor: &mut ParseCursor) -> Result<TreeFunction, ParseError> {
-    dbg!(cursor.peek(0));
-
     let _is_pub = try_parse!(cursor, parse_lit!(Pub)).is_some();
 
     parse_lit!(cursor, Fn)?;
@@ -151,7 +149,10 @@ fn parse_function(cursor: &mut ParseCursor) -> Result<TreeFunction, ParseError> 
 }
 
 fn parse_type(cursor: &mut ParseCursor) -> Result<TreeType, ParseError> {
+    let is_ptr = try_parse!(cursor, parse_lit!(Star)).is_some();
+
     Ok(TreeType {
+        is_ptr,
         name: parse_ident!(cursor)?.clone(),
     })
 }
@@ -170,6 +171,8 @@ fn parse_body(cursor: &mut ParseCursor) -> Result<TreeBody, ParseError> {
 fn parse_expression(cursor: &mut ParseCursor, is_line: bool) -> Result<TreeExpression, ParseError> {
     let expr = if peek_lit!(cursor, If) {
         TreeExpressionKind::IfStatement(parse_if_expression(cursor)?)
+    } else if peek_lit!(cursor, While) {
+        TreeExpressionKind::WhileStatement(parse_while_expression(cursor)?)
     } else if peek_lit!(cursor, Let) {
         TreeExpressionKind::LetStatement(parse_let_expression(cursor)?)
     } else if peek_lit!(cursor, Return) {
@@ -178,6 +181,9 @@ fn parse_expression(cursor: &mut ParseCursor, is_line: bool) -> Result<TreeExpre
         TreeExpressionKind::Number(num)
     } else if let Some(num) = try_parse!(cursor, parse_bool_literal()) {
         TreeExpressionKind::Bool(num)
+    } else if let Some(mut parenthesized) = try_parse!(cursor, parse_group!(Parenthesized)) {
+        let expr = parse_expression(&mut parenthesized, false)?;
+        TreeExpressionKind::Parenthesized(Box::new(expr))
     } else if let Some(op) = try_parse!(cursor, parse_unary_operator()) {
         let expr = parse_expression(cursor, false)?;
         TreeExpressionKind::UnaryOp(TreeUnaryOp {
@@ -204,6 +210,14 @@ fn parse_expression(cursor: &mut ParseCursor, is_line: bool) -> Result<TreeExpre
             kind: expr,
         };
         TreeExpressionKind::BinaryOpList(parse_binary_expression(cursor, expression, binary_op)?)
+    } else if let Some(index_op) = parse_index_operator(cursor)? {
+        TreeExpressionKind::IndexOp(TreeIndexOp {
+            value: Box::new(TreeExpression {
+                has_semi: false,
+                kind: expr,
+            }),
+            index: Box::new(index_op),
+        })
     } else {
         expr
     };
@@ -233,15 +247,29 @@ fn parse_if_expression(cursor: &mut ParseCursor) -> Result<TreeIfStatement, Pars
     let else_ = if peek_lit!(cursor, Else) {
         parse_lit!(cursor, Else)?;
         let mut expr_braces = parse_group!(cursor, Braced)?;
-        parse_body(&mut expr_braces)?
+        Some(parse_body(&mut expr_braces)?)
     } else {
-        TreeBody { body: Vec::new() }
+        None
     };
 
     Ok(TreeIfStatement {
         cond: Box::new(cond),
         then,
         else_,
+    })
+}
+
+fn parse_while_expression(cursor: &mut ParseCursor) -> Result<TreeWhileStatement, ParseError> {
+    parse_lit!(cursor, While)?;
+
+    let cond = parse_expression(cursor, false)?;
+
+    let mut expr_braces = parse_group!(cursor, Braced)?;
+    let run = parse_body(&mut expr_braces)?;
+
+    Ok(TreeWhileStatement {
+        cond: Box::new(cond),
+        body: run,
     })
 }
 
@@ -312,17 +340,38 @@ fn parse_binary_operator(cursor: &mut ParseCursor) -> Result<TreeBinaryOpKind, P
                 cursor.next();
                 Ok(TreeBinaryOpKind::Div)
             }
-            JitTokenKind::LeftBracket => {
+            JitTokenKind::LeftAngBracket => {
                 cursor.next();
                 Ok(TreeBinaryOpKind::Lt)
             }
-            JitTokenKind::RightBracket => {
+            JitTokenKind::RightAngBracket => {
                 cursor.next();
                 Ok(TreeBinaryOpKind::Gt)
+            }
+            JitTokenKind::Pipe => {
+                cursor.next();
+                Ok(TreeBinaryOpKind::BinaryOr)
+            }
+            JitTokenKind::And => {
+                cursor.next();
+                Ok(TreeBinaryOpKind::BinaryAnd)
+            }
+            JitTokenKind::Caret => {
+                cursor.next();
+                Ok(TreeBinaryOpKind::BinaryXor)
             }
             _ => Err(ParseError::Failed),
         },
         None => Err(ParseError::Failed),
+    }
+}
+
+fn parse_index_operator(cursor: &mut ParseCursor) -> Result<Option<TreeExpression>, ParseError> {
+    if let Some(mut bracketed) = try_parse!(cursor, parse_group!(Bracketed)) {
+        let expr = parse_expression(&mut bracketed, false)?;
+        Ok(Some(expr))
+    } else {
+        Ok(None)
     }
 }
 

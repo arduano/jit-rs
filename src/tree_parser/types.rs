@@ -23,6 +23,7 @@ pub struct TreeVariableDeclare {
 
 #[derive(Debug, Clone)]
 pub struct TreeType {
+    pub is_ptr: bool,
     pub name: Cow<'static, str>,
 }
 
@@ -40,22 +41,31 @@ pub struct TreeExpression {
 #[derive(Debug, Clone)]
 pub enum TreeExpressionKind {
     IfStatement(TreeIfStatement),
+    WhileStatement(TreeWhileStatement),
     LetStatement(TreeLetStatement),
     ReturnStatement(TreeReturnStatement),
     BinaryOpList(TreeBinaryOpList),
+    IndexOp(TreeIndexOp),
     UnaryOp(TreeUnaryOp),
     Group(TreeBody),
     ReadVar(TreeVarRead),
     VarAssign(TreeVarAssign),
     Number(TreeNumberLiteral),
     Bool(TreeBoolLiteral),
+    Parenthesized(Box<TreeExpression>),
 }
 
 #[derive(Debug, Clone)]
 pub struct TreeIfStatement {
     pub cond: Box<TreeExpression>,
     pub then: TreeBody,
-    pub else_: TreeBody,
+    pub else_: Option<TreeBody>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TreeWhileStatement {
+    pub cond: Box<TreeExpression>,
+    pub body: TreeBody,
 }
 
 #[derive(Debug, Clone)]
@@ -92,6 +102,12 @@ pub struct TreeUnaryOp {
     pub expr: Box<TreeExpression>,
 }
 
+#[derive(Debug, Clone)]
+pub struct TreeIndexOp {
+    pub value: Box<TreeExpression>,
+    pub index: Box<TreeExpression>,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum TreeBinaryOpKind {
     Add,
@@ -105,8 +121,9 @@ pub enum TreeBinaryOpKind {
     Neq,
     Lte,
     Gte,
-    And,
-    Or,
+    BinaryAnd,
+    BinaryOr,
+    BinaryXor,
 }
 
 #[derive(Debug, Clone)]

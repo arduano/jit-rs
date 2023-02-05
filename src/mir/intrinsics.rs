@@ -1,3 +1,5 @@
+use super::MirType;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MirIntrinsicBinaryOp {
     IntAdd,
@@ -43,7 +45,7 @@ pub enum MirIntrinsicUnaryOp {
     BoolNot,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum MirIntrinsicType {
     Never,
     Void,
@@ -58,6 +60,7 @@ pub enum MirIntrinsicType {
     I64,
     F32,
     F64,
+    Ptr(Box<MirType>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

@@ -29,6 +29,7 @@ pub enum JitTokenKind {
     Pub,
     Fn,
     If,
+    While,
     Else,
     Ident(Cow<'static, str>),
     Number(JitTokenNumberKind, Cow<'static, str>),
@@ -45,13 +46,17 @@ pub enum JitTokenKind {
     Return,
     Let,
     Equal,
+    Pipe,
+    And,
+    Caret,
+    Loop,
     Plus,
     Minus,
     Star,
     Slash,
     Percent,
-    LeftBracket,
-    RightBracket,
+    LeftAngBracket,
+    RightAngBracket,
 }
 
 #[derive(Debug, Clone)]

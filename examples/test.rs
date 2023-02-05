@@ -1,36 +1,27 @@
+use jit_rs::codegen::LlvmCodegen;
+use jit_rs::macro_builder::*;
+use jit_rs::mir::mir_parse_module;
+use jit_rs::tree_parser::*;
 use macros::jit_quote;
 
-use crate::codegen::LlvmCodegen;
-use crate::mir::mir_parse_module;
-
-// mod build_ctx;
-mod codegen;
-mod macro_builder;
-mod mir;
-mod tree_parser;
-
-use macro_builder::*;
-use tree_parser::*;
+#[inline(never)]
+fn test_rs(arg: *mut u32) -> u32 {
+    unsafe {
+        return *arg;
+    }
+}
 
 fn main() {
     let tokens = jit_quote! {
-        pub fn test(arg: u32) -> u32 {
-            let test = arg;
-            return if arg < 10u32 {
-                if arg > 5u32 {
-                    51u32
-                } else {
-                    10u32
-                }
-            } else {
-                50u32
-            }
+        pub fn test(arg: *u32) -> u32 {
+            return arg[1u32];
         }
     };
 
+    println!("{:#?}", &tokens);
+
     let tree = parse_tokens_to_tree(&tokens);
 
-    println!("{:#?}", &tokens);
     println!("{:#?}", &tree);
 
     let module = mir_parse_module(&tree.unwrap()).unwrap();
@@ -55,11 +46,17 @@ fn main() {
 
     let compiled = unsafe {
         engine
-            .get_function::<unsafe extern "C" fn(u32) -> u32>("test")
+            .get_function::<unsafe extern "C" fn(*mut u32) -> u32>("test")
             .unwrap()
     };
 
-    println!("Result: {}", unsafe { compiled.call(1) });
+    let mut arr = [1234u32, 2335u32];
 
-    return;
+    println!("Result: {}", unsafe {
+        compiled.call(std::hint::black_box(arr.as_mut_ptr()))
+    });
+    println!(
+        "Native: {}",
+        test_rs(std::hint::black_box(arr.as_mut_ptr()))
+    );
 }
