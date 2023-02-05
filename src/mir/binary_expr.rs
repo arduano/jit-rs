@@ -1,8 +1,8 @@
 use crate::tree_parser::{TreeBinaryOpKind, TreeBinaryOpList, TreeExpression};
 
 use super::{
-    mir_parse_expression, MirBinaryOp, MirExpression, MirExpressionContext, MirExpressionKind,
-    MirIntrinsicBinaryOp, MirIntrinsicType, MirType, MirTypeKind,
+    mir_parse_expression, ExprLocation, MirBinaryOp, MirExpression, MirExpressionContext,
+    MirExpressionKind, MirIntrinsicBinaryOp, MirIntrinsicType, MirType, MirTypeKind,
 };
 
 #[derive(Debug, Clone)]
@@ -33,7 +33,7 @@ pub fn mir_parse_binary_expr_list(
     let mut slice = TreeBinaryOpSlice { list: expr };
 
     let (left, op) = slice.advance();
-    let left = mir_parse_expression(&left, ctx, false)?;
+    let left = mir_parse_expression(&left, ctx, ExprLocation::Other)?;
     mir_parse_binary_expr_slice(left, op, slice, ctx)
 }
 
@@ -44,12 +44,12 @@ fn mir_parse_binary_expr_slice(
     ctx: &mut MirExpressionContext,
 ) -> Result<MirExpression, ()> {
     if expr.is_empty() {
-        let right = mir_parse_expression(&expr.get_last(), ctx, false)?;
+        let right = mir_parse_expression(&expr.get_last(), ctx, ExprLocation::Other)?;
         return seal_mir_parse_binary_expr(left, op1, right);
     }
 
     let (right, op2) = expr.advance();
-    let right = mir_parse_expression(&right, ctx, false)?;
+    let right = mir_parse_expression(&right, ctx, ExprLocation::Other)?;
 
     let op1_prec = mir_op_precedence(op1);
     let op2_prec = mir_op_precedence(op2);

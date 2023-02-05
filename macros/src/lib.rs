@@ -24,7 +24,7 @@ impl Parse for Mapper {
                 ($token:tt, $kind:ident) => {
                     if res.is_none() && input.peek(Token![$token]) {
                         let _token: Token![$token] = input.parse()?;
-                        res = Some(quote! { JitTokenKind::$kind });
+                        res = Some(quote! { JitTokenKind::Basic(JitBasicToken::$kind) });
                     }
                 };
             }
@@ -41,17 +41,26 @@ impl Parse for Mapper {
                 let content;
                 let _ = syn::braced!(content in input);
                 let token_tree = Mapper::parse(&content)?.token_tree;
-                res = Some(quote! { JitTokenKind::Braced(#token_tree) });
+                res = Some(quote! { JitTokenKind::Grouped {
+                    kind: JitGroupKind::Braces,
+                    tree: #token_tree,
+                } });
             } else if input.peek(Bracket) {
                 let content;
                 let _ = syn::bracketed!(content in input);
                 let token_tree = Mapper::parse(&content)?.token_tree;
-                res = Some(quote! { JitTokenKind::Bracketed(#token_tree) });
+                res = Some(quote! { JitTokenKind::Grouped {
+                    kind: JitGroupKind::Brackets,
+                    tree: #token_tree,
+                } });
             } else if input.peek(Paren) {
                 let content;
                 let _ = syn::parenthesized!(content in input);
                 let token_tree = Mapper::parse(&content)?.token_tree;
-                res = Some(quote! { JitTokenKind::Parenthesized(#token_tree) });
+                res = Some(quote! { JitTokenKind::Grouped {
+                    kind: JitGroupKind::Parentheses,
+                    tree: #token_tree,
+                } });
             } else {
                 try_basic!(pub, Pub);
                 try_basic!(fn, Fn);
@@ -75,9 +84,12 @@ impl Parse for Mapper {
                 try_basic!(^, Caret);
                 try_basic!(%, Percent);
                 try_basic!(|, Pipe);
-                try_basic!(&, And);
+                try_basic!(&, Ampersand);
                 try_basic!(<, LeftAngBracket);
                 try_basic!(>, RightAngBracket);
+                try_basic!(<=, LessEqual);
+                try_basic!(>=, GreaterEqual);
+                try_basic!(!=, NotEqual);
             }
 
             let Some(res) = res else {

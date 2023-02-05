@@ -1,11 +1,17 @@
 mod binary_expr;
 mod blocks;
+mod expression;
 mod intrinsics;
+mod statement;
 mod structures;
+mod types;
 mod variables;
 
+pub use expression::*;
 pub use intrinsics::*;
+pub use statement::*;
 pub use structures::*;
+pub use types::*;
 
 use crate::{
     macro_builder::{JitTokenFloatBits, JitTokenIntegerBits, JitTokenNumberKind},
@@ -100,12 +106,7 @@ fn mir_parse_function(
             ty: ty.clone(),
         };
 
-        let assign = MirStatement {
-            kind: MirStatementKind::VarAssign(MirVariableAssign {
-                var: var_decl.as_var(),
-                value: read,
-            }),
-        };
+        let assign = MirStatement::set_variable(var_decl, read);
         ctx.blocks.add_statement(assign);
     }
 
@@ -133,30 +134,27 @@ fn mir_parse_type(ty: &TreeType) -> Result<MirType, ()> {
         }
     }
 
-    let base = match ty.name.as_ref() {
-        "u8" => intrinsic(MirIntrinsicType::U8),
-        "u16" => intrinsic(MirIntrinsicType::U16),
-        "u32" => intrinsic(MirIntrinsicType::U32),
-        "u64" => intrinsic(MirIntrinsicType::U64),
-        "i8" => intrinsic(MirIntrinsicType::I8),
-        "i16" => intrinsic(MirIntrinsicType::I16),
-        "i32" => intrinsic(MirIntrinsicType::I32),
-        "i64" => intrinsic(MirIntrinsicType::I64),
-        "f32" => intrinsic(MirIntrinsicType::F32),
-        "f64" => intrinsic(MirIntrinsicType::F64),
-        "bool" => intrinsic(MirIntrinsicType::Bool),
-        _ => {
-            panic!("Unsupported type: {}", ty.name);
-        }
-    };
-
-    if ty.is_ptr {
-        Ok(MirType {
-            kind: MirTypeKind::Intrinsic(MirIntrinsicType::Ptr(Box::new(base))),
-        })
-    } else {
-        Ok(base)
-    }
+    Ok(match ty {
+        TreeType::Base(ty) => match ty.name.as_ref() {
+            "u8" => intrinsic(MirIntrinsicType::U8),
+            "u16" => intrinsic(MirIntrinsicType::U16),
+            "u32" => intrinsic(MirIntrinsicType::U32),
+            "u64" => intrinsic(MirIntrinsicType::U64),
+            "i8" => intrinsic(MirIntrinsicType::I8),
+            "i16" => intrinsic(MirIntrinsicType::I16),
+            "i32" => intrinsic(MirIntrinsicType::I32),
+            "i64" => intrinsic(MirIntrinsicType::I64),
+            "f32" => intrinsic(MirIntrinsicType::F32),
+            "f64" => intrinsic(MirIntrinsicType::F64),
+            "bool" => intrinsic(MirIntrinsicType::Bool),
+            _ => {
+                panic!("Unsupported type: {}", ty.name);
+            }
+        },
+        TreeType::Ptr(ty) => MirType {
+            kind: MirTypeKind::Intrinsic(MirIntrinsicType::Ptr(Box::new(mir_parse_type(&ty)?))),
+        },
+    })
 }
 
 fn mir_get_void_type() -> MirType {
@@ -168,7 +166,7 @@ fn mir_get_void_type() -> MirType {
 fn mir_parse_body(body: &TreeBody, ctx: &mut MirExpressionContext) -> Result<MirExpression, ()> {
     for (i, expr) in body.body.iter().enumerate() {
         let is_last = i == body.body.len() - 1;
-        let expr = mir_parse_expression(expr, ctx, true)?;
+        let expr = mir_parse_expression(expr, ctx, ExprLocation::Root)?;
 
         if is_last {
             return Ok(expr);
@@ -178,32 +176,34 @@ fn mir_parse_body(body: &TreeBody, ctx: &mut MirExpressionContext) -> Result<Mir
     unreachable!()
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExprLocation {
+    Root,
+    PtrAssign,
+    Other,
+}
+
 fn mir_parse_expression(
     expr: &TreeExpression,
     ctx: &mut MirExpressionContext,
-    is_root: bool,
+    pos: ExprLocation,
 ) -> Result<MirExpression, ()> {
     let mut value = match &expr.kind {
         TreeExpressionKind::IfStatement(statement) => {
-            let cond = mir_parse_expression(&statement.cond, ctx, false)?;
+            let cond = mir_parse_expression(&statement.cond, ctx, ExprLocation::Other)?;
             mir_insert_condition(cond, &statement.then, statement.else_.as_ref(), ctx)?
         }
         TreeExpressionKind::LetStatement(statement) => {
-            if !is_root {
+            if pos != ExprLocation::Root {
                 panic!("Let statements can only be used at the root of an expression");
             } else {
-                let value = mir_parse_expression(&statement.value, ctx, false)?;
+                let value = mir_parse_expression(&statement.value, ctx, ExprLocation::Other)?;
 
-                let assign = MirVariableAssign {
-                    var: ctx
-                        .variables
-                        .declare(statement.name.clone(), value.ty.clone())
-                        .as_var(),
-                    value,
-                };
-                let assign = MirStatement {
-                    kind: MirStatementKind::VarAssign(assign),
-                };
+                let var_decl = ctx
+                    .variables
+                    .declare(statement.name.clone(), value.ty.clone());
+
+                let assign = MirStatement::set_variable(var_decl, value);
                 ctx.blocks.add_statement(assign);
 
                 mir_make_empty_expr()
@@ -212,25 +212,29 @@ fn mir_parse_expression(
         TreeExpressionKind::BinaryOpList(list) => mir_parse_binary_expr_list(list.clone(), ctx)?,
         TreeExpressionKind::UnaryOp(_) => todo!(),
         TreeExpressionKind::Group(_) => todo!(),
-        TreeExpressionKind::ReadVar(read) => {
+        TreeExpressionKind::VarRead(read) => {
             let var = ctx.variables.get(&read.name).unwrap();
-            MirExpression {
-                kind: MirExpressionKind::ReadVariable(MirReadVariable { var: var.as_var() }),
-                ty: var.ty.clone(),
+            let expr = MirExpression {
+                kind: MirExpressionKind::GetVariablePtr(MirGetVariablePtr { var: var.as_var() }),
+                ty: var.ty.as_ptr().clone(),
+            };
+
+            if pos == ExprLocation::PtrAssign {
+                expr
+            } else {
+                mir_deref_expr(expr, ctx)
             }
         }
-        TreeExpressionKind::VarAssign(statement) => {
-            if !is_root {
+        TreeExpressionKind::PtrAssign(statement) => {
+            if pos != ExprLocation::Root {
                 panic!("Var assign statements can only be used at the root of an expression");
             } else {
-                let value = mir_parse_expression(&statement.value, ctx, false)?;
+                let ptr = mir_parse_expression(&statement.ptr, ctx, ExprLocation::PtrAssign)?;
+                let value = mir_parse_expression(&statement.value, ctx, ExprLocation::Other)?;
 
-                let assign = MirVariableAssign {
-                    var: ctx.variables.get(&statement.name).unwrap().as_var(),
-                    value,
-                };
+                let assign = MirPtrAssign { ptr, value };
                 let assign = MirStatement {
-                    kind: MirStatementKind::VarAssign(assign),
+                    kind: MirStatementKind::PtrAssign(assign),
                 };
                 ctx.blocks.add_statement(assign);
 
@@ -272,7 +276,7 @@ fn mir_parse_expression(
             },
         },
         TreeExpressionKind::ReturnStatement(ret) => {
-            let value = mir_parse_expression(&ret.value, ctx, false)?;
+            let value = mir_parse_expression(&ret.value, ctx, ExprLocation::Other)?;
             ctx.blocks.add_statement(MirStatement {
                 kind: MirStatementKind::Return(value),
             });
@@ -291,7 +295,7 @@ fn mir_parse_expression(
             ctx.blocks.add_statement(jump);
 
             ctx.blocks.select_block(loop_start);
-            let cond = mir_parse_expression(&statement.cond, ctx, false)?;
+            let cond = mir_parse_expression(&statement.cond, ctx, ExprLocation::Other)?;
 
             let jump = MirStatement {
                 kind: MirStatementKind::ConditionalJump(MirConditionalJump {
@@ -316,35 +320,49 @@ fn mir_parse_expression(
 
             mir_make_empty_expr()
         }
-        TreeExpressionKind::Parenthesized(expr) => mir_parse_expression(&expr, ctx, is_root)?,
+        TreeExpressionKind::Parenthesized(expr) => mir_parse_expression(&expr.inner, ctx, pos)?,
         TreeExpressionKind::IndexOp(index) => {
-            let value = mir_parse_expression(&index.value, ctx, false)?;
-            let index = mir_parse_expression(&index.index, ctx, false)?;
+            let ptr = mir_parse_expression(&index.ptr, ctx, ExprLocation::Other)?;
+            let index = mir_parse_expression(&index.index, ctx, ExprLocation::Other)?;
 
             match &index.ty.kind {
                 MirTypeKind::Intrinsic(MirIntrinsicType::U32) => {}
                 _ => panic!("Unexpected value type for index operation"),
             }
 
-            let ty = match &value.ty.kind {
-                MirTypeKind::Intrinsic(MirIntrinsicType::Ptr(ty)) => ty,
+            match &ptr.ty.kind {
+                MirTypeKind::Intrinsic(MirIntrinsicType::Ptr(_)) => {}
                 _ => panic!("Unexpected value type for index operation"),
-            };
+            }
 
             let value = MirExpression {
-                ty: ty.as_ref().clone(),
-                kind: MirExpressionKind::IndexPtr(Box::new(MirIndexPtr { value, index })),
+                ty: ptr.ty.clone(),
+                kind: MirExpressionKind::IndexPtr(Box::new(MirIndexPtr { value: ptr, index })),
             };
+
+            if pos == ExprLocation::PtrAssign {
+                value
+            } else {
+                mir_deref_expr(value, ctx)
+            }
+        }
+        TreeExpressionKind::VoidValue(expr) => {
+            let mut value = mir_parse_expression(&expr, ctx, ExprLocation::Other)?;
+            value.ty = mir_get_void_type();
 
             value
         }
     };
 
-    if expr.has_semi {
-        value.ty = mir_get_void_type();
-    }
-
     Ok(value)
+}
+
+fn mir_deref_expr(expr: MirExpression, ctx: &mut MirExpressionContext) -> MirExpression {
+    dbg!(expr.ty.deref_ptr());
+    MirExpression {
+        ty: expr.ty.deref_ptr().clone(),
+        kind: MirExpressionKind::PtrDeref(Box::new(MirPtrDeref { ptr: expr })),
+    }
 }
 
 fn mir_insert_condition(
@@ -383,26 +401,16 @@ fn mir_insert_condition(
         let var_decl = ctx.variables.declare_nameless(ty.clone());
 
         ctx.blocks.select_block(then_block_end);
-        let assign = MirStatement {
-            kind: MirStatementKind::VarAssign(MirVariableAssign {
-                var: var_decl.as_var(),
-                value: then_value,
-            }),
-        };
+        let assign = MirStatement::set_variable(var_decl.clone(), then_value);
         ctx.blocks.add_statement(assign);
 
         ctx.blocks.select_block(else_block_end);
-        let assign = MirStatement {
-            kind: MirStatementKind::VarAssign(MirVariableAssign {
-                var: var_decl.as_var(),
-                value: else_value,
-            }),
-        };
+        let assign = MirStatement::set_variable(var_decl.clone(), else_value);
         ctx.blocks.add_statement(assign);
 
         MirExpression {
             ty,
-            kind: MirExpressionKind::ReadVariable(MirReadVariable {
+            kind: MirExpressionKind::GetVariablePtr(MirGetVariablePtr {
                 var: var_decl.as_var(),
             }),
         }

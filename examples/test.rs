@@ -14,7 +14,7 @@ fn test_rs(arg: *mut u32) -> u32 {
 fn main() {
     let tokens = jit_quote! {
         pub fn test(arg: *u32) -> u32 {
-            return arg[1u32];
+            return arg[0u32];
         }
     };
 

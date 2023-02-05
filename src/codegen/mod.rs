@@ -260,10 +260,12 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
                         self.module.builder.build_return(None);
                     }
                 }
-                MirStatementKind::VarAssign(ass) => {
-                    let value = self.write_expression(&ass.value);
-                    let variable = self.variables[ass.var.index];
-                    self.module.builder.build_store(variable, value.unwrap());
+                MirStatementKind::PtrAssign(ass) => {
+                    let value = self.write_expression(&ass.value).unwrap();
+                    let ptr = self.write_expression(&ass.ptr).unwrap();
+                    self.module
+                        .builder
+                        .build_store(ptr.into_pointer_value(), value);
                 }
                 MirStatementKind::Jump(jump) => {
                     let block = self.blocks[jump.index];
@@ -290,11 +292,9 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
                 let arg = self.fn_value.get_nth_param(arg.index as u32).unwrap();
                 Some(arg)
             }
-            MirExpressionKind::ReadVariable(read_var) => {
+            MirExpressionKind::GetVariablePtr(read_var) => {
                 let variable = self.variables[read_var.var.index];
-                let ty = self.get_type(&expr.ty);
-                let value = self.module.builder.build_load(ty, variable, "var");
-                Some(value)
+                Some(variable.into())
             }
             MirExpressionKind::Literal(lit) => {
                 let ctx = &self.module.context;
@@ -532,9 +532,17 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
                         .build_gep(pointee_ty, value, &[index], "index")
                 };
 
-                let val = self.module.builder.build_load(pointee_ty, ptr, "read");
+                Some(ptr.into())
+            }
+            MirExpressionKind::PtrDeref(deref) => {
+                let ptr = self.write_expression(&deref.ptr).unwrap();
+                let ptr = ptr.into_pointer_value();
 
-                Some(val)
+                let pointee_ty = self.get_type(&expr.ty);
+
+                let value = self.module.builder.build_load(pointee_ty, ptr, "deref");
+
+                Some(value.into())
             }
         }
     }
