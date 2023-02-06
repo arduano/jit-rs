@@ -39,6 +39,10 @@ pub struct LlvmCodegenModule<'ctx> {
 
 impl<'ctx> LlvmCodegenModule<'ctx> {
     pub fn execution_engine(&self) -> ExecutionEngine<'ctx> {
+        // Calling this is required to make sure the JIT doesn't get optimized away
+        // during LTO. Otherwise we'll have a lot of errors.
+        ExecutionEngine::link_in_mc_jit();
+
         self.module
             .create_jit_execution_engine(OptimizationLevel::Aggressive)
             .unwrap()
