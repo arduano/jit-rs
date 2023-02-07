@@ -1,6 +1,6 @@
 mod macros;
-mod parser;
 mod module;
+mod parser;
 
 pub use module::*;
 

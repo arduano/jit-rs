@@ -50,7 +50,7 @@ fn main() {
 
     let engine = module.execution_engine();
 
-    let mut arr = [1234u32, 2335u32];
+    let arr = [1234u32, 2335u32];
 
     let result = unsafe {
         let compiled = engine
