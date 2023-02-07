@@ -10,7 +10,7 @@ use inkwell::{
     targets::{CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetTriple},
     types::BasicType,
     values::{BasicValueEnum, FunctionValue, PointerValue},
-    AddressSpace, IntPredicate, OptimizationLevel,
+    AddressSpace, FloatPredicate, IntPredicate, OptimizationLevel,
 };
 
 use crate::mir::*;
@@ -534,17 +534,120 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
                             )
                             .into(),
                     ),
-                    MirIntrinsicBinaryOp::FloatAdd => todo!(),
-                    MirIntrinsicBinaryOp::FloatSub => todo!(),
-                    MirIntrinsicBinaryOp::FloatMul => todo!(),
-                    MirIntrinsicBinaryOp::FloatDiv => todo!(),
-                    MirIntrinsicBinaryOp::FloatRem => todo!(),
-                    MirIntrinsicBinaryOp::FloatEq => todo!(),
-                    MirIntrinsicBinaryOp::FloatNeq => todo!(),
-                    MirIntrinsicBinaryOp::FloatLt => todo!(),
-                    MirIntrinsicBinaryOp::FloatLte => todo!(),
-                    MirIntrinsicBinaryOp::FloatGt => todo!(),
-                    MirIntrinsicBinaryOp::FloatGte => todo!(),
+                    MirIntrinsicBinaryOp::FloatAdd => Some(
+                        builder
+                            .build_float_add(lhs.into_float_value(), rhs.into_float_value(), "add")
+                            .into(),
+                    ),
+                    MirIntrinsicBinaryOp::FloatSub => Some(
+                        builder
+                            .build_float_sub(lhs.into_float_value(), rhs.into_float_value(), "sub")
+                            .into(),
+                    ),
+                    MirIntrinsicBinaryOp::FloatMul => Some(
+                        builder
+                            .build_float_mul(lhs.into_float_value(), rhs.into_float_value(), "mul")
+                            .into(),
+                    ),
+                    MirIntrinsicBinaryOp::FloatDiv => Some(
+                        builder
+                            .build_float_div(lhs.into_float_value(), rhs.into_float_value(), "div")
+                            .into(),
+                    ),
+                    MirIntrinsicBinaryOp::FloatRem => Some(
+                        builder
+                            .build_float_rem(lhs.into_float_value(), rhs.into_float_value(), "rem")
+                            .into(),
+                    ),
+                    MirIntrinsicBinaryOp::FloatEq => Some(
+                        builder
+                            .build_float_compare(
+                                FloatPredicate::OEQ,
+                                lhs.into_float_value(),
+                                rhs.into_float_value(),
+                                "eq",
+                            )
+                            .into(),
+                    ),
+                    MirIntrinsicBinaryOp::FloatNeq => Some(
+                        builder
+                            .build_float_compare(
+                                FloatPredicate::ONE,
+                                lhs.into_float_value(),
+                                rhs.into_float_value(),
+                                "ne",
+                            )
+                            .into(),
+                    ),
+                    MirIntrinsicBinaryOp::FloatLt => Some(
+                        builder
+                            .build_float_compare(
+                                FloatPredicate::OLT,
+                                lhs.into_float_value(),
+                                rhs.into_float_value(),
+                                "lt",
+                            )
+                            .into(),
+                    ),
+                    MirIntrinsicBinaryOp::FloatLte => Some(
+                        builder
+                            .build_float_compare(
+                                FloatPredicate::OLE,
+                                lhs.into_float_value(),
+                                rhs.into_float_value(),
+                                "le",
+                            )
+                            .into(),
+                    ),
+                    MirIntrinsicBinaryOp::FloatGt => Some(
+                        builder
+                            .build_float_compare(
+                                FloatPredicate::OGT,
+                                lhs.into_float_value(),
+                                rhs.into_float_value(),
+                                "gt",
+                            )
+                            .into(),
+                    ),
+                    MirIntrinsicBinaryOp::FloatGte => Some(
+                        builder
+                            .build_float_compare(
+                                FloatPredicate::OGE,
+                                lhs.into_float_value(),
+                                rhs.into_float_value(),
+                                "ge",
+                            )
+                            .into(),
+                    ),
+                }
+            }
+            MirExpressionKind::UnaryOp(op) => {
+                let operand = self.write_expression(&op.operand).unwrap();
+
+                let builder = &self.module.builder;
+
+                match &op.op {
+                    MirIntrinsicUnaryOp::IntNeg => Some(
+                        builder
+                            .build_int_neg(operand.into_int_value(), "neg")
+                            .into(),
+                    ),
+                    MirIntrinsicUnaryOp::FloatNeg => Some(
+                        builder
+                            .build_float_neg(operand.into_float_value(), "neg")
+                            .into(),
+                    ),
+                    MirIntrinsicUnaryOp::BoolNot => {
+                        Some(builder.build_not(operand.into_int_value(), "not").into())
+                    }
+                    MirIntrinsicUnaryOp::PointerDeref => {
+                        let ptr = operand.into_pointer_value();
+                        let pointee_ty = self.get_type(&expr.ty);
+
+                        let value = builder.build_load(pointee_ty, ptr, "deref");
+
+                        Some(value.into())
+                    }
                 }
             }
             MirExpressionKind::IndexPtr(index_ptr) => {

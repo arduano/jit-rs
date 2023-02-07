@@ -1,8 +1,11 @@
-use crate::tree_parser::{TreeBinaryOpKind, TreeBinaryOpList, TreeExpression};
+use crate::tree_parser::{
+    TreeBinaryOpKind, TreeBinaryOpList, TreeExpression, TreeUnaryOp, TreeUnaryOpKind,
+};
 
 use super::{
     mir_parse_expression, ExprLocation, MirBinaryOp, MirExpression, MirExpressionContext,
-    MirExpressionKind, MirIntrinsicBinaryOp, MirIntrinsicType, MirType, MirTypeKind,
+    MirExpressionKind, MirIntrinsicBinaryOp, MirIntrinsicType, MirIntrinsicUnaryOp, MirType,
+    MirTypeKind, MirUnaryOp,
 };
 
 #[derive(Debug, Clone)]
@@ -329,6 +332,41 @@ fn seal_mir_parse_binary_expr(
             lhs: left,
             rhs: right,
         })),
+    })
+}
+
+pub fn mir_parse_unary_expr(
+    unary: &TreeUnaryOp,
+    ctx: &mut MirExpressionContext,
+) -> Result<MirExpression, ()> {
+    let expr = mir_parse_expression(&unary.expr, ctx, ExprLocation::Other)?;
+    let op = &unary.op;
+
+    let (op, ty) = match op {
+        TreeUnaryOpKind::Neg => {
+            if is_float_type(&expr.ty) {
+                (MirIntrinsicUnaryOp::FloatNeg, expr.ty.clone())
+            } else if is_int_type(&expr.ty) {
+                (MirIntrinsicUnaryOp::IntNeg, expr.ty.clone())
+            } else {
+                return Err(());
+            }
+        }
+        TreeUnaryOpKind::Deref => {
+            if is_ptr_type(&expr.ty) {
+                (
+                    MirIntrinsicUnaryOp::PointerDeref,
+                    expr.ty.deref_ptr().clone(),
+                )
+            } else {
+                return Err(());
+            }
+        }
+    };
+
+    Ok(MirExpression {
+        ty,
+        kind: MirExpressionKind::UnaryOp(Box::new(MirUnaryOp { op, operand: expr })),
     })
 }
 

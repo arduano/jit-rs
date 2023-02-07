@@ -59,7 +59,7 @@ impl TreeBinaryOpList {
         let mut pairs = vec![(first, first_op)];
         let mut last = get_required_val!(
             cursor,
-            TreeExpression::parse(cursor.clone(), ExprLocation::Other)
+            TreeExpression::parse(cursor.clone(), ExprLocation::BinaryOperand)
         );
 
         loop {
@@ -69,7 +69,7 @@ impl TreeBinaryOpList {
 
             let right = get_required_val!(
                 cursor,
-                TreeExpression::parse(cursor.clone(), ExprLocation::Other)
+                TreeExpression::parse(cursor.clone(), ExprLocation::BinaryOperand)
             );
 
             pairs.push((last, op));

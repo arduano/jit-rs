@@ -41,4 +41,5 @@ pub enum MirIntrinsicUnaryOp {
     IntNeg,
     FloatNeg,
     BoolNot,
+    PointerDeref,
 }

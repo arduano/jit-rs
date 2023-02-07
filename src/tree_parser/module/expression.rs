@@ -35,6 +35,7 @@ pub enum TreeExpressionKind {
 pub enum ExprLocation {
     Root,
     Other,
+    BinaryOperand,
 }
 
 impl TreeExpression {
@@ -76,7 +77,7 @@ impl TreeExpression {
                 }
             }
 
-            if TreeBinaryOpList::could_match(&cursor) {
+            if pos != ExprLocation::BinaryOperand && TreeBinaryOpList::could_match(&cursor) {
                 expr = TreeExpression {
                     kind: TreeExpressionKind::BinaryOpList(get_required_val!(
                         cursor,

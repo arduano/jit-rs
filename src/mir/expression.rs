@@ -1,4 +1,7 @@
-use super::{variables::MirVariableDecl, MirIntrinsicBinaryOp, MirLiteral, MirType, MirVariable};
+use super::{
+    variables::MirVariableDecl, MirIntrinsicBinaryOp, MirIntrinsicUnaryOp, MirLiteral, MirType,
+    MirVariable,
+};
 
 #[derive(Debug, Clone)]
 pub struct MirExpression {
@@ -31,6 +34,7 @@ pub enum MirExpressionKind {
     PtrDeref(Box<MirPtrDeref>),
     Literal(MirLiteral),
     BinaryOp(Box<MirBinaryOp>),
+    UnaryOp(Box<MirUnaryOp>),
     NoValue,
 }
 
@@ -39,6 +43,12 @@ pub struct MirBinaryOp {
     pub lhs: MirExpression,
     pub rhs: MirExpression,
     pub op: MirIntrinsicBinaryOp,
+}
+
+#[derive(Debug, Clone)]
+pub struct MirUnaryOp {
+    pub operand: MirExpression,
+    pub op: MirIntrinsicUnaryOp,
 }
 
 #[derive(Debug, Clone)]

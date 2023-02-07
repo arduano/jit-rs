@@ -64,6 +64,7 @@ impl TreeBinaryOpKind {
 #[derive(Debug, Clone)]
 pub enum TreeUnaryOpKind {
     Neg,
+    Deref,
 }
 
 impl TreeUnaryOpKind {
@@ -76,6 +77,7 @@ impl TreeUnaryOpKind {
             Some(JitToken { kind, span: _ }) => match kind {
                 JitTokenKind::Basic(basic) => match basic {
                     JitBasicToken::Minus => Ok(Self::Neg),
+                    JitBasicToken::Star => Ok(Self::Deref),
                     _ => Err(ParseResult::no_match(Self::KIND)),
                 },
                 _ => Err(ParseResult::no_match(Self::KIND)),

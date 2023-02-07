@@ -18,8 +18,8 @@ fn main() {
         //     arg[1u32] = 5555u32;
         //     return arg[1u32];
         // }
-        pub fn test(arg: *[u32; 2u32], index: u32) -> u32 {
-            let arg = arg[0u32];
+        pub fn test(arg: *[u32; 2u32], index: usize) -> u32 {
+            let arg = (*arg);
             return arg[index];
         }
     };
@@ -54,7 +54,7 @@ fn main() {
 
     let result = unsafe {
         let compiled = engine
-            .get_function::<unsafe extern "C" fn(*const u32, u32) -> u32>("test")
+            .get_function::<unsafe extern "C" fn(*const u32, usize) -> u32>("test")
             .unwrap();
         compiled.call(arr.as_ptr(), 0)
     };

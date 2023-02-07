@@ -1,7 +1,7 @@
-mod binary_expr;
 mod blocks;
 mod expression;
 mod intrinsics;
+mod operators;
 mod statement;
 mod structures;
 mod types;
@@ -15,13 +15,13 @@ pub use types::*;
 
 use crate::{
     macro_builder::{JitTokenFloatBits, JitTokenIntegerBits, JitTokenNumberKind},
-    mir::binary_expr::mir_parse_binary_expr_list,
+    mir::operators::mir_parse_binary_expr_list,
     tree_parser::{
         TreeBody, TreeExpression, TreeExpressionKind, TreeFunction, TreeModule, TreeType,
     },
 };
 
-use self::{blocks::MirBlockBuilder, variables::VariableStorage};
+use self::{blocks::MirBlockBuilder, operators::mir_parse_unary_expr, variables::VariableStorage};
 
 struct MirFunctionContext<'a> {
     functions: &'a [MirFunctionDeclaration],
@@ -140,10 +140,12 @@ fn mir_parse_type(ty: &TreeType) -> Result<MirType, ()> {
             "u16" => intrinsic(MirIntrinsicType::U16),
             "u32" => intrinsic(MirIntrinsicType::U32),
             "u64" => intrinsic(MirIntrinsicType::U64),
+            "usize" => intrinsic(MirIntrinsicType::USize),
             "i8" => intrinsic(MirIntrinsicType::I8),
             "i16" => intrinsic(MirIntrinsicType::I16),
             "i32" => intrinsic(MirIntrinsicType::I32),
             "i64" => intrinsic(MirIntrinsicType::I64),
+            "isize" => intrinsic(MirIntrinsicType::ISize),
             "f32" => intrinsic(MirIntrinsicType::F32),
             "f64" => intrinsic(MirIntrinsicType::F64),
             "bool" => intrinsic(MirIntrinsicType::Bool),
@@ -217,8 +219,8 @@ fn mir_parse_expression(
             }
         }
         TreeExpressionKind::BinaryOpList(list) => mir_parse_binary_expr_list(list.clone(), ctx)?,
-        TreeExpressionKind::UnaryOp(_) => todo!(),
-        TreeExpressionKind::Group(_) => todo!(),
+        TreeExpressionKind::UnaryOp(unary) => mir_parse_unary_expr(unary, ctx)?,
+        TreeExpressionKind::Group(inner) => mir_parse_body(inner, ctx)?,
         TreeExpressionKind::VarRead(read) => {
             let var = ctx.variables.get(&read.name).unwrap();
             let expr = MirExpression {
@@ -339,7 +341,7 @@ fn mir_parse_expression(
             let index = mir_parse_expression(&index.index, ctx, ExprLocation::Other)?;
 
             match &index.ty.kind {
-                MirTypeKind::Intrinsic(MirIntrinsicType::U32) => {}
+                MirTypeKind::Intrinsic(MirIntrinsicType::USize) => {}
                 _ => panic!("Unexpected value type for index operation"),
             }
 
