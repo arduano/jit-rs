@@ -1,59 +1,14 @@
 use std::borrow::Cow;
 
+pub use crate::common::{FloatBits, IntBits, NumberKind};
+
 #[derive(Debug, Clone)]
 pub struct JitSpan {}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum JitTokenIntegerBits {
-    Bits8,
-    Bits16,
-    Bits32,
-    Bits64,
-    BitsSize,
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum JitTokenFloatBits {
-    Bits32,
-    Bits64,
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum JitTokenNumberKind {
-    SignedInt(JitTokenIntegerBits),
-    UnsignedInt(JitTokenIntegerBits),
-    Float(JitTokenFloatBits),
-}
-
-impl std::fmt::Display for JitTokenNumberKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            JitTokenNumberKind::SignedInt(bits) => match bits {
-                JitTokenIntegerBits::Bits8 => write!(f, "i8"),
-                JitTokenIntegerBits::Bits16 => write!(f, "i16"),
-                JitTokenIntegerBits::Bits32 => write!(f, "i32"),
-                JitTokenIntegerBits::Bits64 => write!(f, "i64"),
-                JitTokenIntegerBits::BitsSize => write!(f, "isize"),
-            },
-            JitTokenNumberKind::UnsignedInt(bits) => match bits {
-                JitTokenIntegerBits::Bits8 => write!(f, "u8"),
-                JitTokenIntegerBits::Bits16 => write!(f, "u16"),
-                JitTokenIntegerBits::Bits32 => write!(f, "u32"),
-                JitTokenIntegerBits::Bits64 => write!(f, "u64"),
-                JitTokenIntegerBits::BitsSize => write!(f, "usize"),
-            },
-            JitTokenNumberKind::Float(bits) => match bits {
-                JitTokenFloatBits::Bits32 => write!(f, "f32"),
-                JitTokenFloatBits::Bits64 => write!(f, "f64"),
-            },
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 pub enum JitTokenKind {
     Ident(Cow<'static, str>),
-    Number(JitTokenNumberKind, Cow<'static, str>),
+    Number(NumberKind, Cow<'static, str>),
     Bool(bool),
     Grouped {
         kind: JitGroupKind,

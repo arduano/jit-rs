@@ -144,15 +144,15 @@ fn parse_lit_int(input: ParseStream) -> syn::Result<proc_macro2::TokenStream> {
     };
 
     let kind = match kind_str {
-        "i" => quote!(JitTokenNumberKind::SignedInt(JitTokenIntegerBits::#bits)),
-        "u" => quote!(JitTokenNumberKind::UnsignedInt(JitTokenIntegerBits::#bits)),
+        "i" => quote!(NumberKind::SignedInt(IntBits::#bits)),
+        "u" => quote!(NumberKind::UnsignedInt(IntBits::#bits)),
         "f" => {
             match bits_str {
                 "32" => {}
                 "64" => {}
                 _ => return Err(syn::Error::new(span, "Expected a valid float bit size")),
             }
-            quote!(JitTokenNumberKind::Float(JitTokenFloatBits::#bits))
+            quote!(NumberKind::Float(FloatBits::#bits))
         }
         _ => return Err(syn::Error::new(span, "Expected a valid integer type")),
     };
@@ -178,13 +178,13 @@ fn parse_lit_float(input: ParseStream) -> syn::Result<proc_macro2::TokenStream> 
     let (kind, bits) = token.suffix().split_at(1);
 
     let bits = match bits {
-        "32" => quote!(JitTokenFloatBits::Bits32),
-        "64" => quote!(JitTokenFloatBits::Bits64),
+        "32" => quote!(FloatBits::Bits32),
+        "64" => quote!(FloatBits::Bits64),
         _ => return Err(syn::Error::new(span, "Expected a valid integer bit size")),
     };
 
     let kind = match kind {
-        "f" => quote!(JitTokenNumberKind::Float(#bits)),
+        "f" => quote!(NumberKind::Float(#bits)),
         _ => return Err(syn::Error::new(span, "Expected a valid float type")),
     };
 

@@ -4,17 +4,17 @@ mod intrinsics;
 mod operators;
 mod statement;
 mod structures;
-mod types;
+mod ty;
 mod variables;
 
 pub use expression::*;
 pub use intrinsics::*;
 pub use statement::*;
 pub use structures::*;
-pub use types::*;
+pub use ty::*;
 
 use crate::{
-    macro_builder::{JitTokenFloatBits, JitTokenIntegerBits, JitTokenNumberKind},
+    common::{FloatBits, IntBits, NumberKind},
     mir::operators::mir_parse_binary_expr_list,
     tree_parser::{
         TreeBody, TreeExpression, TreeExpressionKind, TreeFunction, TreeModule, TreeType,
@@ -128,47 +128,58 @@ fn mir_parse_function(
 }
 
 fn mir_parse_type(ty: &TreeType) -> Result<MirType, ()> {
-    fn intrinsic(ty: MirIntrinsicType) -> MirType {
-        MirType {
-            kind: MirTypeKind::Intrinsic(ty),
-        }
+    fn base(kind: MirTypeKind) -> MirType {
+        MirType { kind }
+    }
+
+    fn number(ty: NumberKind) -> MirType {
+        base(MirTypeKind::Num(ty))
+    }
+
+    fn float(bits: FloatBits) -> MirType {
+        number(NumberKind::Float(bits))
+    }
+
+    fn uint(bits: IntBits) -> MirType {
+        number(NumberKind::UnsignedInt(bits))
+    }
+
+    fn sint(bits: IntBits) -> MirType {
+        number(NumberKind::SignedInt(bits))
     }
 
     Ok(match ty {
         TreeType::Base(ty) => match ty.name.as_ref() {
-            "u8" => intrinsic(MirIntrinsicType::U8),
-            "u16" => intrinsic(MirIntrinsicType::U16),
-            "u32" => intrinsic(MirIntrinsicType::U32),
-            "u64" => intrinsic(MirIntrinsicType::U64),
-            "usize" => intrinsic(MirIntrinsicType::USize),
-            "i8" => intrinsic(MirIntrinsicType::I8),
-            "i16" => intrinsic(MirIntrinsicType::I16),
-            "i32" => intrinsic(MirIntrinsicType::I32),
-            "i64" => intrinsic(MirIntrinsicType::I64),
-            "isize" => intrinsic(MirIntrinsicType::ISize),
-            "f32" => intrinsic(MirIntrinsicType::F32),
-            "f64" => intrinsic(MirIntrinsicType::F64),
-            "bool" => intrinsic(MirIntrinsicType::Bool),
+            "u8" => uint(IntBits::Bits8),
+            "u16" => uint(IntBits::Bits16),
+            "u32" => uint(IntBits::Bits32),
+            "u64" => uint(IntBits::Bits64),
+            "usize" => uint(IntBits::BitsSize),
+            "i8" => sint(IntBits::Bits8),
+            "i16" => sint(IntBits::Bits16),
+            "i32" => sint(IntBits::Bits32),
+            "i64" => sint(IntBits::Bits64),
+            "isize" => sint(IntBits::BitsSize),
+            "f32" => float(FloatBits::Bits32),
+            "f64" => float(FloatBits::Bits64),
+            "bool" => base(MirTypeKind::Bool),
             _ => {
                 panic!("Unsupported type: {}", ty.name);
             }
         },
-        TreeType::Ptr(ty) => MirType {
-            kind: MirTypeKind::Intrinsic(MirIntrinsicType::Ptr(Box::new(mir_parse_type(&ty)?))),
-        },
+
+        TreeType::Ptr(ty) => base(MirTypeKind::Ptr(Box::new(mir_parse_type(&ty)?))),
         TreeType::ConstArray(ty, size) => {
             let ty = mir_parse_type(&ty)?;
 
-            MirType {
-                kind: MirTypeKind::Intrinsic(MirIntrinsicType::ConstArray(Box::new(ty), *size)),
-            }
+            base(MirTypeKind::ConstArray(Box::new(ty), *size))
         }
     })
 }
 
 fn mir_get_void_type() -> MirType {
     MirType {
-        kind: MirTypeKind::Intrinsic(MirIntrinsicType::Void),
+        kind: MirTypeKind::Void,
     }
 }
 
@@ -255,39 +266,38 @@ fn mir_parse_expression(
             mir_make_empty_expr()
         }
         TreeExpressionKind::Number(num) => {
-            use JitTokenFloatBits as FB;
-            use JitTokenIntegerBits as IB;
-            use JitTokenNumberKind::*;
-            use MirIntrinsicType as Ty;
+            use FloatBits as FB;
+            use IntBits as IB;
             use MirLiteral as Lit;
+            use NumberKind::*;
 
             let value = &num.value;
-            let (literal, ty) = match num.ty {
-                UnsignedInt(IB::Bits8) => (Lit::U8(value.parse().unwrap()), Ty::U8),
-                UnsignedInt(IB::Bits16) => (Lit::U16(value.parse().unwrap()), Ty::U16),
-                UnsignedInt(IB::Bits32) => (Lit::U32(value.parse().unwrap()), Ty::U32),
-                UnsignedInt(IB::Bits64) => (Lit::U64(value.parse().unwrap()), Ty::U64),
-                UnsignedInt(IB::BitsSize) => (Lit::USize(value.parse().unwrap()), Ty::USize),
-                SignedInt(IB::Bits8) => (Lit::I8(value.parse().unwrap()), Ty::I8),
-                SignedInt(IB::Bits16) => (Lit::I16(value.parse().unwrap()), Ty::I16),
-                SignedInt(IB::Bits32) => (Lit::I32(value.parse().unwrap()), Ty::I32),
-                SignedInt(IB::Bits64) => (Lit::I64(value.parse().unwrap()), Ty::I64),
-                SignedInt(IB::BitsSize) => (Lit::ISize(value.parse().unwrap()), Ty::ISize),
-                Float(FB::Bits32) => (Lit::F32(value.parse().unwrap()), Ty::F32),
-                Float(FB::Bits64) => (Lit::F64(value.parse().unwrap()), Ty::F64),
+            let literal = match num.ty {
+                UnsignedInt(IB::Bits8) => Lit::U8(value.parse().unwrap()),
+                UnsignedInt(IB::Bits16) => Lit::U16(value.parse().unwrap()),
+                UnsignedInt(IB::Bits32) => Lit::U32(value.parse().unwrap()),
+                UnsignedInt(IB::Bits64) => Lit::U64(value.parse().unwrap()),
+                UnsignedInt(IB::BitsSize) => Lit::USize(value.parse().unwrap()),
+                SignedInt(IB::Bits8) => Lit::I8(value.parse().unwrap()),
+                SignedInt(IB::Bits16) => Lit::I16(value.parse().unwrap()),
+                SignedInt(IB::Bits32) => Lit::I32(value.parse().unwrap()),
+                SignedInt(IB::Bits64) => Lit::I64(value.parse().unwrap()),
+                SignedInt(IB::BitsSize) => Lit::ISize(value.parse().unwrap()),
+                Float(FB::Bits32) => Lit::F32(value.parse().unwrap()),
+                Float(FB::Bits64) => Lit::F64(value.parse().unwrap()),
             };
 
             MirExpression {
                 kind: MirExpressionKind::Literal(literal),
                 ty: MirType {
-                    kind: MirTypeKind::Intrinsic(ty),
+                    kind: MirTypeKind::Num(num.ty),
                 },
             }
         }
         TreeExpressionKind::Bool(bool) => MirExpression {
             kind: MirExpressionKind::Literal(MirLiteral::Bool(bool.value)),
             ty: MirType {
-                kind: MirTypeKind::Intrinsic(MirIntrinsicType::Bool),
+                kind: MirTypeKind::Bool,
             },
         },
         TreeExpressionKind::ReturnStatement(ret) => {
@@ -341,7 +351,7 @@ fn mir_parse_expression(
             let index = mir_parse_expression(&index.index, ctx, ExprLocation::Other)?;
 
             match &index.ty.kind {
-                MirTypeKind::Intrinsic(MirIntrinsicType::USize) => {}
+                MirTypeKind::Num(NumberKind::UnsignedInt(IntBits::BitsSize)) => {}
                 _ => panic!("Unexpected value type for index operation"),
             }
 
@@ -349,7 +359,7 @@ fn mir_parse_expression(
             let ty_inside_ptr = ptr.ty.deref_ptr().clone();
 
             let value = match &ty_inside_ptr.kind {
-                MirTypeKind::Intrinsic(MirIntrinsicType::Ptr(ty)) => {
+                MirTypeKind::Ptr(ty) => {
                     // From: parent ptr -> ptr -> value
                     // To: (derefed -> ) indexed ptr -> value
 
@@ -364,7 +374,7 @@ fn mir_parse_expression(
                         })),
                     }
                 }
-                MirTypeKind::Intrinsic(MirIntrinsicType::ConstArray(ty, _)) => {
+                MirTypeKind::ConstArray(ty, _) => {
                     // From: parent ptr -> [array -> value]
                     // To: indexed ptr -> value
 
@@ -501,8 +511,8 @@ fn mir_insert_condition(
 
 fn mir_is_empty_type(ty: &MirType) -> bool {
     match &ty.kind {
-        MirTypeKind::Intrinsic(MirIntrinsicType::Void) => true,
-        MirTypeKind::Intrinsic(MirIntrinsicType::Never) => true,
+        MirTypeKind::Void => true,
+        MirTypeKind::Never => true,
         _ => false,
     }
 }

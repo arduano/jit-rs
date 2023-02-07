@@ -1,11 +1,13 @@
-use crate::tree_parser::{
-    TreeBinaryOpKind, TreeBinaryOpList, TreeExpression, TreeUnaryOp, TreeUnaryOpKind,
+use crate::{
+    common::NumberKind,
+    tree_parser::{
+        TreeBinaryOpKind, TreeBinaryOpList, TreeExpression, TreeUnaryOp, TreeUnaryOpKind,
+    },
 };
 
 use super::{
     mir_parse_expression, ExprLocation, MirBinaryOp, MirExpression, MirExpressionContext,
-    MirExpressionKind, MirIntrinsicBinaryOp, MirIntrinsicType, MirIntrinsicUnaryOp, MirType,
-    MirTypeKind, MirUnaryOp,
+    MirExpressionKind, MirIntrinsicBinaryOp, MirIntrinsicUnaryOp, MirType, MirTypeKind, MirUnaryOp,
 };
 
 #[derive(Debug, Clone)]
@@ -93,7 +95,7 @@ fn seal_mir_parse_binary_expr(
     right: MirExpression,
 ) -> Result<MirExpression, ()> {
     let bool_ty = MirType {
-        kind: MirTypeKind::Intrinsic(MirIntrinsicType::Bool),
+        kind: MirTypeKind::Bool,
     };
 
     let (op, ty) = match op {
@@ -371,35 +373,23 @@ pub fn mir_parse_unary_expr(
 }
 
 fn is_float_type(ty: &MirType) -> bool {
-    use MirIntrinsicType as IT;
-
     match &ty.kind {
-        MirTypeKind::Intrinsic(ty) => match ty {
-            IT::F32 | IT::F64 => true,
-            _ => false,
-        },
+        MirTypeKind::Num(NumberKind::Float(_)) => true,
+        _ => false,
     }
 }
 
 fn is_uint_type(ty: &MirType) -> bool {
-    use MirIntrinsicType as IT;
-
     match &ty.kind {
-        MirTypeKind::Intrinsic(ty) => match ty {
-            IT::U8 | IT::U16 | IT::U32 | IT::U64 => true,
-            _ => false,
-        },
+        MirTypeKind::Num(NumberKind::UnsignedInt(_)) => true,
+        _ => false,
     }
 }
 
 fn is_sint_type(ty: &MirType) -> bool {
-    use MirIntrinsicType as IT;
-
     match &ty.kind {
-        MirTypeKind::Intrinsic(ty) => match ty {
-            IT::I8 | IT::I16 | IT::I32 | IT::I64 => true,
-            _ => false,
-        },
+        MirTypeKind::Num(NumberKind::SignedInt(_)) => true,
+        _ => false,
     }
 }
 
@@ -409,9 +399,7 @@ fn is_int_type(ty: &MirType) -> bool {
 
 fn is_ptr_type(ty: &MirType) -> bool {
     match &ty.kind {
-        MirTypeKind::Intrinsic(ty) => match ty {
-            MirIntrinsicType::Ptr(_) => true,
-            _ => false,
-        },
+        MirTypeKind::Ptr(_) => true,
+        _ => false,
     }
 }

@@ -1,3 +1,5 @@
+use crate::common::NumberKind;
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct MirType {
     pub kind: MirTypeKind,
@@ -6,7 +8,7 @@ pub struct MirType {
 impl MirType {
     pub fn as_ptr(&self) -> MirType {
         MirType {
-            kind: MirTypeKind::Intrinsic(MirIntrinsicType::Ptr(Box::new(self.clone()))),
+            kind: MirTypeKind::Ptr(Box::new(self.clone())),
         }
     }
 
@@ -16,7 +18,7 @@ impl MirType {
 
     pub fn try_deref_ptr(&self) -> Option<&MirType> {
         match &self.kind {
-            MirTypeKind::Intrinsic(MirIntrinsicType::Ptr(ty)) => Some(ty),
+            MirTypeKind::Ptr(ty) => Some(ty),
             _ => None,
         }
     }
@@ -24,28 +26,13 @@ impl MirType {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum MirTypeKind {
-    Intrinsic(MirIntrinsicType),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum MirIntrinsicType {
     Never,
     Void,
     Bool,
-    U8,
-    U16,
-    U32,
-    U64,
-    USize,
-    I8,
-    I16,
-    I32,
-    I64,
-    ISize,
-    F32,
-    F64,
+    Num(NumberKind),
     Ptr(Box<MirType>),
     ConstArray(Box<MirType>, u32),
+    Vector(Box<MirType>, u32),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

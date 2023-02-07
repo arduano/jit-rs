@@ -15,6 +15,13 @@ pub struct MirFunctionDeclaration {
 }
 
 #[derive(Debug, Clone)]
+pub struct MirFunctionBody {
+    pub decl: MirFunctionDeclaration,
+    pub variables: Vec<MirVariableDeclare>,
+    pub blocks: Vec<MirBlock>,
+}
+
+#[derive(Debug, Clone)]
 pub struct MirFunction {
     pub decl: MirFunctionDeclaration,
     pub variables: Vec<MirVariableDeclare>,
@@ -41,6 +48,7 @@ pub struct MirBlock {
 pub struct MirVariableDeclare {
     pub ty: MirType,
 }
+
 #[derive(Debug, Clone)]
 pub struct MirVariableId {
     pub index: usize,

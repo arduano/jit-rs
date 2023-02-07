@@ -13,7 +13,10 @@ use inkwell::{
     AddressSpace, FloatPredicate, IntPredicate, OptimizationLevel,
 };
 
-use crate::mir::*;
+use crate::{
+    common::{FloatBits, IntBits, NumberKind},
+    mir::*,
+};
 
 pub struct LlvmCodegen {
     context: Context,
@@ -164,28 +167,42 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
         module
     }
 
-    fn get_type(&self, ty: &MirType) -> inkwell::types::BasicTypeEnum<'ctx> {
-        use MirIntrinsicType as IT;
-
-        match &ty.kind {
-            MirTypeKind::Intrinsic(ty) => match ty {
-                IT::I8 | IT::U8 => self.context.i8_type().into(),
-                IT::I16 | IT::U16 => self.context.i16_type().into(),
-                IT::I32 | IT::U32 => self.context.i32_type().into(),
-                IT::I64 | IT::U64 => self.context.i64_type().into(),
-                IT::F32 => self.context.f32_type().into(),
-                IT::F64 => self.context.f64_type().into(),
-                IT::Bool => self.context.bool_type().into(),
-                IT::Void => panic!("Unexpected void type"),
-                IT::Never => panic!("Unexpected never type"),
-                IT::Ptr(ty) => self.get_type(ty).ptr_type(AddressSpace::default()).into(),
-                IT::ConstArray(ty, size) => self.get_type(ty).array_type(*size).into(),
-
-                IT::USize | IT::ISize => match self.size_bits {
-                    SizeBits::Bits32 => self.context.i32_type().into(),
-                    SizeBits::Bits64 => self.context.i64_type().into(),
-                },
+    fn get_int_type(&self, bits: &IntBits) -> inkwell::types::IntType<'ctx> {
+        match &bits {
+            IntBits::Bits8 => self.context.i8_type(),
+            IntBits::Bits16 => self.context.i16_type(),
+            IntBits::Bits32 => self.context.i32_type(),
+            IntBits::Bits64 => self.context.i64_type(),
+            IntBits::BitsSize => match self.size_bits {
+                SizeBits::Bits32 => self.context.i32_type(),
+                SizeBits::Bits64 => self.context.i64_type(),
             },
+        }
+    }
+
+    fn get_float_type(&self, bits: &FloatBits) -> inkwell::types::FloatType<'ctx> {
+        match &bits {
+            FloatBits::Bits32 => self.context.f32_type(),
+            FloatBits::Bits64 => self.context.f64_type(),
+        }
+    }
+
+    fn get_type(&self, ty: &MirType) -> inkwell::types::BasicTypeEnum<'ctx> {
+        match &ty.kind {
+            MirTypeKind::Num(ty) => match ty {
+                NumberKind::UnsignedInt(bits) => self.get_int_type(bits).into(),
+                NumberKind::SignedInt(bits) => self.get_int_type(bits).into(),
+                NumberKind::Float(bits) => self.get_float_type(bits).into(),
+            },
+
+            MirTypeKind::Bool => self.context.bool_type().into(),
+            MirTypeKind::Void => panic!("Unexpected void type"),
+            MirTypeKind::Never => panic!("Unexpected never type"),
+            MirTypeKind::Ptr(ty) => self.get_type(ty).ptr_type(AddressSpace::default()).into(),
+            MirTypeKind::ConstArray(ty, size) => self.get_type(ty).array_type(*size).into(),
+            MirTypeKind::Vector(ty, size) => {
+                self.get_type(ty).into_int_type().vec_type(*size).into()
+            }
         }
     }
 
@@ -194,14 +211,12 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
         ty: &MirType,
         param_types: impl Iterator<Item = &'b MirType>,
     ) -> inkwell::types::FunctionType<'ctx> {
-        use MirIntrinsicType as IT;
-
         let args = param_types
             .map(|arg| self.get_type(&arg).into())
             .collect::<Vec<_>>();
 
         match ty.kind {
-            MirTypeKind::Intrinsic(IT::Void) | MirTypeKind::Intrinsic(IT::Never) => {
+            MirTypeKind::Void | MirTypeKind::Never => {
                 self.context.void_type().fn_type(&args, false)
             }
 

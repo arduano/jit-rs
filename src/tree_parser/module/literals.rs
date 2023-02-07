@@ -1,14 +1,15 @@
 use std::borrow::Cow;
 
 use crate::{
-    macro_builder::{JitToken, JitTokenKind, JitTokenNumberKind},
+    common::NumberKind,
+    macro_builder::{JitToken, JitTokenKind},
     tree_parser::parser::{ParseCursor, ParseResult},
 };
 
 #[derive(Debug, Clone)]
 pub struct TreeNumberLiteral {
     pub value: Cow<'static, str>,
-    pub ty: JitTokenNumberKind,
+    pub ty: NumberKind,
 }
 
 impl TreeNumberLiteral {
