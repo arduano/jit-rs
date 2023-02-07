@@ -9,6 +9,13 @@ macro_rules! get_required_val {
             ParseResult::Error(err) => return ParseResult::Error(err),
         }
     };
+    ($val:expr) => {
+        match $val.no_match_into_error() {
+            ParseResult::Ok(_, val) => val,
+            ParseResult::NoMatch { .. } => unreachable!(),
+            ParseResult::Error(err) => return ParseResult::Error(err),
+        }
+    };
 }
 pub(super) use get_required_val;
 

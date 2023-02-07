@@ -1,8 +1,8 @@
 mod macros;
 mod parser;
-mod types;
+mod module;
 
-pub use types::*;
+pub use module::*;
 
 use crate::macro_builder::JitTokenTree;
 

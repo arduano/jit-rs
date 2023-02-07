@@ -4,19 +4,23 @@ use jit_rs::mir::mir_parse_module;
 use jit_rs::tree_parser::*;
 use macros::jit_quote;
 
-#[inline(never)]
-fn test_rs(arg: *mut u32) -> u32 {
-    unsafe {
-        return *arg;
-    }
-}
+// #[inline(never)]
+// fn test_rs(arg: *mut u32) -> u32 {
+//     unsafe {
+//         return *arg;
+//     }
+// }
 
 fn main() {
     let tokens = jit_quote! {
-        pub fn test(arg: *u32) -> u32 {
-            arg[0u32] = 6666u32;
-            arg[1u32] = 5555u32;
-            return arg[1u32];
+        // pub fn test(arg: *[u32; 1u32]) -> [u32; 1u32] {
+        //     arg[0u32] = 6666u32;
+        //     arg[1u32] = 5555u32;
+        //     return arg[1u32];
+        // }
+        pub fn test(arg: *[u32; 2u32], index: u32) -> u32 {
+            let arg = arg[0u32];
+            return arg[index];
         }
     };
 
@@ -46,19 +50,19 @@ fn main() {
 
     let engine = module.execution_engine();
 
-    let compiled = unsafe {
-        engine
-            .get_function::<unsafe extern "C" fn(*mut u32) -> u32>("test")
-            .unwrap()
-    };
-
     let mut arr = [1234u32, 2335u32];
 
-    println!("Result: {}", unsafe {
-        compiled.call(std::hint::black_box(arr.as_mut_ptr()))
-    });
-    println!(
-        "Native: {}",
-        test_rs(std::hint::black_box(arr.as_mut_ptr()))
-    );
+    let result = unsafe {
+        let compiled = engine
+            .get_function::<unsafe extern "C" fn(*const u32, u32) -> u32>("test")
+            .unwrap();
+        compiled.call(arr.as_ptr(), 0)
+    };
+
+    println!("Result: {}", result);
+
+    // println!(
+    //     "Native: {}",
+    //     test_rs(std::hint::black_box(arr.as_mut_ptr()))
+    // );
 }

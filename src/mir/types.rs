@@ -11,9 +11,13 @@ impl MirType {
     }
 
     pub fn deref_ptr(&self) -> &MirType {
+        self.try_deref_ptr().expect("Cannot deref non-pointer type")
+    }
+
+    pub fn try_deref_ptr(&self) -> Option<&MirType> {
         match &self.kind {
-            MirTypeKind::Intrinsic(MirIntrinsicType::Ptr(ty)) => ty,
-            _ => panic!("Cannot deref non-pointer type"),
+            MirTypeKind::Intrinsic(MirIntrinsicType::Ptr(ty)) => Some(ty),
+            _ => None,
         }
     }
 }
@@ -32,13 +36,16 @@ pub enum MirIntrinsicType {
     U16,
     U32,
     U64,
+    USize,
     I8,
     I16,
     I32,
     I64,
+    ISize,
     F32,
     F64,
     Ptr(Box<MirType>),
+    ConstArray(Box<MirType>, u32),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -48,10 +55,12 @@ pub enum MirLiteral {
     U16(u16),
     U32(u32),
     U64(u64),
+    USize(usize),
     I8(i8),
     I16(i16),
     I32(i32),
     I64(i64),
+    ISize(isize),
     F32(f32),
     F64(f64),
 }

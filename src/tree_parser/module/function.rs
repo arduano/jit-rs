@@ -52,7 +52,7 @@ impl TreeFunction {
         };
 
         let body_cursor = pass_val!(cursor.parse_next_group(JitGroupKind::Braces));
-        let body = get_required_val!(cursor, TreeBody::parse(body_cursor));
+        let body = get_required_val!(TreeBody::parse(body_cursor));
 
         ParseResult::Ok(
             cursor,

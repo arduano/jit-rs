@@ -154,6 +154,13 @@ fn mir_parse_type(ty: &TreeType) -> Result<MirType, ()> {
         TreeType::Ptr(ty) => MirType {
             kind: MirTypeKind::Intrinsic(MirIntrinsicType::Ptr(Box::new(mir_parse_type(&ty)?))),
         },
+        TreeType::ConstArray(ty, size) => {
+            let ty = mir_parse_type(&ty)?;
+
+            MirType {
+                kind: MirTypeKind::Intrinsic(MirIntrinsicType::ConstArray(Box::new(ty), *size)),
+            }
+        }
     })
 }
 
@@ -179,7 +186,7 @@ fn mir_parse_body(body: &TreeBody, ctx: &mut MirExpressionContext) -> Result<Mir
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ExprLocation {
     Root,
-    PtrAssign,
+    NoDeref,
     Other,
 }
 
@@ -219,15 +226,23 @@ fn mir_parse_expression(
                 ty: var.ty.as_ptr().clone(),
             };
 
-            if pos == ExprLocation::PtrAssign {
+            if pos == ExprLocation::NoDeref {
                 expr
             } else {
                 mir_deref_expr(expr, ctx)
             }
         }
         TreeExpressionKind::PtrAssign(statement) => {
-            let ptr = mir_parse_expression(&statement.ptr, ctx, ExprLocation::PtrAssign)?;
+            let ptr = mir_parse_expression(&statement.ptr, ctx, ExprLocation::NoDeref)?;
             let value = mir_parse_expression(&statement.value, ctx, ExprLocation::Other)?;
+
+            if let Some(ptr_ty) = ptr.ty.try_deref_ptr() {
+                if ptr_ty != &value.ty {
+                    panic!("Type mismatch in pointer assignment");
+                }
+            } else {
+                panic!("Cannot assign to non-pointer");
+            }
 
             let assign = MirPtrAssign { ptr, value };
             let assign = MirStatement {
@@ -250,10 +265,12 @@ fn mir_parse_expression(
                 UnsignedInt(IB::Bits16) => (Lit::U16(value.parse().unwrap()), Ty::U16),
                 UnsignedInt(IB::Bits32) => (Lit::U32(value.parse().unwrap()), Ty::U32),
                 UnsignedInt(IB::Bits64) => (Lit::U64(value.parse().unwrap()), Ty::U64),
+                UnsignedInt(IB::BitsSize) => (Lit::USize(value.parse().unwrap()), Ty::USize),
                 SignedInt(IB::Bits8) => (Lit::I8(value.parse().unwrap()), Ty::I8),
                 SignedInt(IB::Bits16) => (Lit::I16(value.parse().unwrap()), Ty::I16),
                 SignedInt(IB::Bits32) => (Lit::I32(value.parse().unwrap()), Ty::I32),
                 SignedInt(IB::Bits64) => (Lit::I64(value.parse().unwrap()), Ty::I64),
+                SignedInt(IB::BitsSize) => (Lit::ISize(value.parse().unwrap()), Ty::ISize),
                 Float(FB::Bits32) => (Lit::F32(value.parse().unwrap()), Ty::F32),
                 Float(FB::Bits64) => (Lit::F64(value.parse().unwrap()), Ty::F64),
             };
@@ -318,7 +335,7 @@ fn mir_parse_expression(
         }
         TreeExpressionKind::Parenthesized(expr) => mir_parse_expression(&expr.inner, ctx, pos)?,
         TreeExpressionKind::IndexOp(index) => {
-            let ptr = mir_parse_expression(&index.ptr, ctx, ExprLocation::Other)?;
+            let ptr = mir_parse_expression(&index.ptr, ctx, ExprLocation::NoDeref)?;
             let index = mir_parse_expression(&index.index, ctx, ExprLocation::Other)?;
 
             match &index.ty.kind {
@@ -326,24 +343,53 @@ fn mir_parse_expression(
                 _ => panic!("Unexpected value type for index operation"),
             }
 
-            match &ptr.ty.kind {
-                MirTypeKind::Intrinsic(MirIntrinsicType::Ptr(_)) => {}
-                _ => panic!("Unexpected value type for index operation"),
-            }
+            // TODO: Error if this isn't a ptr. We can only index ptr types.
+            let ty_inside_ptr = ptr.ty.deref_ptr().clone();
 
-            let value = MirExpression {
-                ty: ptr.ty.clone(),
-                kind: MirExpressionKind::IndexPtr(Box::new(MirIndexPtr { value: ptr, index })),
+            let value = match &ty_inside_ptr.kind {
+                MirTypeKind::Intrinsic(MirIntrinsicType::Ptr(ty)) => {
+                    // From: parent ptr -> ptr -> value
+                    // To: (derefed -> ) indexed ptr -> value
+
+                    let index_ty = (**ty).clone();
+                    let ptr = mir_deref_expr(ptr, ctx);
+                    MirExpression {
+                        ty: ty_inside_ptr.clone(),
+                        kind: MirExpressionKind::IndexPtr(Box::new(MirIndexPtr {
+                            value: ptr,
+                            index,
+                            index_ty,
+                        })),
+                    }
+                }
+                MirTypeKind::Intrinsic(MirIntrinsicType::ConstArray(ty, _)) => {
+                    // From: parent ptr -> [array -> value]
+                    // To: indexed ptr -> value
+
+                    let index_ty = (**ty).clone();
+                    let new_ty = ty.as_ptr();
+
+                    MirExpression {
+                        ty: new_ty,
+                        kind: MirExpressionKind::IndexPtr(Box::new(MirIndexPtr {
+                            value: ptr,
+                            index,
+                            index_ty,
+                        })),
+                    }
+                }
+                _ => panic!("Unexpected value type for index operation"),
             };
 
-            if pos == ExprLocation::PtrAssign {
+            if pos == ExprLocation::NoDeref {
                 value
             } else {
                 mir_deref_expr(value, ctx)
             }
         }
         TreeExpressionKind::VoidValue(expr) => {
-            let mut value = mir_parse_expression(&expr, ctx, ExprLocation::Other)?;
+            // Pass pos across, because void is just a marker expression
+            let mut value = mir_parse_expression(&expr, ctx, pos)?;
             value.ty = mir_get_void_type();
 
             value
@@ -354,9 +400,13 @@ fn mir_parse_expression(
 }
 
 fn mir_deref_expr(expr: MirExpression, _ctx: &mut MirExpressionContext) -> MirExpression {
+    let ty = expr.ty.deref_ptr().clone();
     MirExpression {
-        ty: expr.ty.deref_ptr().clone(),
-        kind: MirExpressionKind::PtrDeref(Box::new(MirPtrDeref { ptr: expr })),
+        ty: ty.clone(),
+        kind: MirExpressionKind::PtrDeref(Box::new(MirPtrDeref {
+            ptr: expr,
+            underlying_ty: ty.clone(),
+        })),
     }
 }
 

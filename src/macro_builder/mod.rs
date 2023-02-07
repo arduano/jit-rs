@@ -3,21 +3,22 @@ use std::borrow::Cow;
 #[derive(Debug, Clone)]
 pub struct JitSpan {}
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum JitTokenIntegerBits {
     Bits8,
     Bits16,
     Bits32,
     Bits64,
+    BitsSize,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum JitTokenFloatBits {
     Bits32,
     Bits64,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum JitTokenNumberKind {
     SignedInt(JitTokenIntegerBits),
     UnsignedInt(JitTokenIntegerBits),
@@ -32,12 +33,14 @@ impl std::fmt::Display for JitTokenNumberKind {
                 JitTokenIntegerBits::Bits16 => write!(f, "i16"),
                 JitTokenIntegerBits::Bits32 => write!(f, "i32"),
                 JitTokenIntegerBits::Bits64 => write!(f, "i64"),
+                JitTokenIntegerBits::BitsSize => write!(f, "isize"),
             },
             JitTokenNumberKind::UnsignedInt(bits) => match bits {
                 JitTokenIntegerBits::Bits8 => write!(f, "u8"),
                 JitTokenIntegerBits::Bits16 => write!(f, "u16"),
                 JitTokenIntegerBits::Bits32 => write!(f, "u32"),
                 JitTokenIntegerBits::Bits64 => write!(f, "u64"),
+                JitTokenIntegerBits::BitsSize => write!(f, "usize"),
             },
             JitTokenNumberKind::Float(bits) => match bits {
                 JitTokenFloatBits::Bits32 => write!(f, "f32"),
@@ -132,6 +135,7 @@ impl std::fmt::Display for JitTokenTree {
             tokens: &self.tokens,
             indent: 0,
             start_newline: false,
+            is_inside_square_brackets: false,
         };
         write!(f, "{}", printer)
     }
@@ -141,6 +145,7 @@ struct JitTokenTreePrinter<'a> {
     tokens: &'a [JitToken],
     indent: usize,
     start_newline: bool,
+    is_inside_square_brackets: bool,
 }
 
 impl std::fmt::Display for JitTokenTreePrinter<'_> {
@@ -162,6 +167,7 @@ impl std::fmt::Display for JitTokenTreePrinter<'_> {
                             tokens: &tree.tokens,
                             indent: self.indent + 1,
                             start_newline: true,
+                            is_inside_square_brackets: false,
                         };
                         write!(f, "{}", inner_printer)?;
                         for _ in 0..self.indent {
@@ -176,6 +182,7 @@ impl std::fmt::Display for JitTokenTreePrinter<'_> {
                             tokens: &tree.tokens,
                             indent: self.indent + 1,
                             start_newline: false,
+                            is_inside_square_brackets: true,
                         };
                         write!(f, "{}", inner_printer)?;
                         write!(f, "]")?;
@@ -186,6 +193,7 @@ impl std::fmt::Display for JitTokenTreePrinter<'_> {
                             tokens: &tree.tokens,
                             indent: self.indent + 1,
                             start_newline: false,
+                            is_inside_square_brackets: false,
                         };
                         write!(f, "{}", inner_printer)?;
                         write!(f, ")")?;
@@ -199,7 +207,9 @@ impl std::fmt::Display for JitTokenTreePrinter<'_> {
                 JitTokenKind::Basic(basic) => match basic {
                     JitBasicToken::Semicolon => {
                         write!(f, ";")?;
-                        newline = true;
+                        if !self.is_inside_square_brackets {
+                            newline = true;
+                        }
                     }
 
                     JitBasicToken::Pub => write!(f, "pub")?,

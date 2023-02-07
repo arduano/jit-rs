@@ -31,7 +31,15 @@ impl LlvmCodegen {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+enum SizeBits {
+    Bits32,
+    Bits64,
+}
+
 pub struct LlvmCodegenModule<'ctx> {
+    size_bits: SizeBits,
     context: &'ctx Context,
     module: Module<'ctx>,
     builder: Builder<'ctx>,
@@ -131,10 +139,17 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
         let module = context.create_module(name);
         let builder = context.create_builder();
 
+        // Set at compile time because this is a jit that doesn't cross-compile.
+        #[cfg(target_pointer_width = "64")]
+        let size_bits = SizeBits::Bits64;
+        #[cfg(target_pointer_width = "32")]
+        let size_bits = SizeBits::Bits32;
+
         let module = Self {
             context,
             module,
             builder,
+            size_bits,
         };
 
         let mut functions = Vec::new();
@@ -154,20 +169,22 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
 
         match &ty.kind {
             MirTypeKind::Intrinsic(ty) => match ty {
-                IT::I8 => self.context.i8_type().into(),
-                IT::I16 => self.context.i16_type().into(),
-                IT::I32 => self.context.i32_type().into(),
-                IT::I64 => self.context.i64_type().into(),
-                IT::U8 => self.context.i8_type().into(),
-                IT::U16 => self.context.i16_type().into(),
-                IT::U32 => self.context.i32_type().into(),
-                IT::U64 => self.context.i64_type().into(),
+                IT::I8 | IT::U8 => self.context.i8_type().into(),
+                IT::I16 | IT::U16 => self.context.i16_type().into(),
+                IT::I32 | IT::U32 => self.context.i32_type().into(),
+                IT::I64 | IT::U64 => self.context.i64_type().into(),
                 IT::F32 => self.context.f32_type().into(),
                 IT::F64 => self.context.f64_type().into(),
                 IT::Bool => self.context.bool_type().into(),
                 IT::Void => panic!("Unexpected void type"),
                 IT::Never => panic!("Unexpected never type"),
                 IT::Ptr(ty) => self.get_type(ty).ptr_type(AddressSpace::default()).into(),
+                IT::ConstArray(ty, size) => self.get_type(ty).array_type(*size).into(),
+
+                IT::USize | IT::ISize => match self.size_bits {
+                    SizeBits::Bits32 => self.context.i32_type().into(),
+                    SizeBits::Bits64 => self.context.i64_type().into(),
+                },
             },
         }
     }
@@ -315,6 +332,15 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
                     MirLiteral::I64(val) => ctx.i64_type().const_int(*val as u64, true).into(),
                     MirLiteral::F32(val) => ctx.f32_type().const_float(*val as f64).into(),
                     MirLiteral::F64(val) => ctx.f64_type().const_float(*val).into(),
+
+                    MirLiteral::USize(val) => match self.module.size_bits {
+                        SizeBits::Bits32 => ctx.i32_type().const_int(*val as u64, false).into(),
+                        SizeBits::Bits64 => ctx.i64_type().const_int(*val as u64, false).into(),
+                    },
+                    MirLiteral::ISize(val) => match self.module.size_bits {
+                        SizeBits::Bits32 => ctx.i32_type().const_int(*val as u64, false).into(),
+                        SizeBits::Bits64 => ctx.i64_type().const_int(*val as u64, false).into(),
+                    },
                 })
             }
             MirExpressionKind::NoValue => None,
@@ -521,14 +547,14 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
                     MirIntrinsicBinaryOp::FloatGte => todo!(),
                 }
             }
-            MirExpressionKind::IndexPtr(index) => {
-                let value = self.write_expression(&index.value).unwrap();
-                let index = self.write_expression(&index.index).unwrap();
+            MirExpressionKind::IndexPtr(index_ptr) => {
+                let value = self.write_expression(&index_ptr.value).unwrap();
+                let index = self.write_expression(&index_ptr.index).unwrap();
 
                 let value = value.into_pointer_value();
                 let index = index.into_int_value();
 
-                let pointee_ty = self.get_type(&expr.ty.deref_ptr());
+                let pointee_ty = self.get_type(&index_ptr.index_ty);
 
                 let ptr = unsafe {
                     self.module
@@ -542,7 +568,7 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
                 let ptr = self.write_expression(&deref.ptr).unwrap();
                 let ptr = ptr.into_pointer_value();
 
-                let pointee_ty = self.get_type(&expr.ty);
+                let pointee_ty = self.get_type(&deref.underlying_ty);
 
                 let value = self.module.builder.build_load(pointee_ty, ptr, "deref");
 

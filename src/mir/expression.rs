@@ -14,7 +14,10 @@ impl MirExpression {
         };
 
         Self {
-            kind: MirExpressionKind::PtrDeref(Box::new(MirPtrDeref { ptr })),
+            kind: MirExpressionKind::PtrDeref(Box::new(MirPtrDeref {
+                ptr,
+                underlying_ty: var.ty.clone(),
+            })),
             ty: var.ty.clone(),
         }
     }
@@ -40,6 +43,7 @@ pub struct MirBinaryOp {
 
 #[derive(Debug, Clone)]
 pub struct MirPtrDeref {
+    pub underlying_ty: MirType,
     pub ptr: MirExpression,
 }
 
@@ -52,6 +56,7 @@ pub struct MirGetVariablePtr {
 pub struct MirIndexPtr {
     pub value: MirExpression,
     pub index: MirExpression,
+    pub index_ty: MirType,
 }
 
 #[derive(Debug, Clone)]
