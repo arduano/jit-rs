@@ -340,6 +340,7 @@ fn seal_mir_parse_binary_expr(
 pub fn mir_parse_unary_expr(
     unary: &TreeUnaryOp,
     ctx: &mut MirExpressionContext,
+    pos: ExprLocation,
 ) -> Result<MirExpression, ()> {
     let expr = mir_parse_expression(&unary.expr, ctx, ExprLocation::Other)?;
     let op = &unary.op;
@@ -356,10 +357,15 @@ pub fn mir_parse_unary_expr(
         }
         TreeUnaryOpKind::Deref => {
             if is_ptr_type(&expr.ty) {
-                (
-                    MirIntrinsicUnaryOp::PointerDeref,
-                    expr.ty.deref_ptr().clone(),
-                )
+                if pos == ExprLocation::NoDeref {
+                    // This is an edge case where the expression is unaffected
+                    return Ok(expr);
+                } else {
+                    (
+                        MirIntrinsicUnaryOp::PointerDeref,
+                        expr.ty.deref_ptr().clone(),
+                    )
+                }
             } else {
                 return Err(());
             }

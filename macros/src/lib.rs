@@ -140,6 +140,7 @@ fn parse_lit_int(input: ParseStream) -> syn::Result<proc_macro2::TokenStream> {
         "16" => quote!(Bits16),
         "32" => quote!(Bits32),
         "64" => quote!(Bits64),
+        "size" => quote!(BitsSize),
         _ => return Err(syn::Error::new(span, "Expected a valid integer bit size")),
     };
 

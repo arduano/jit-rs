@@ -86,7 +86,7 @@ impl TreeExpression {
                 };
                 continue;
             }
-            if TreePtrAssign::could_match(&cursor) {
+            if pos == ExprLocation::Root && TreePtrAssign::could_match(&cursor) {
                 expr = TreeExpression {
                     kind: TreeExpressionKind::PtrAssign(get_required_val!(
                         cursor,

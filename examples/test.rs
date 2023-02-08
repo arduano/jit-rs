@@ -18,9 +18,15 @@ fn main() {
         //     arg[1u32] = 5555u32;
         //     return arg[1u32];
         // }
-        pub fn test(arg: *[u32; 2u32], index: usize) -> u32 {
-            let arg = (*arg);
-            return arg[index];
+        // pub fn test(arg: *[u32; 2u32], index: usize) -> u32 {
+        //     let arg = (*arg);
+        //     return arg[index];
+        // }
+        pub fn mod_ptr(arg: *u32) {
+            *arg = 10u32;
+        }
+        pub fn vec_add(arg: *<u32; 8usize>) {
+            *arg = (*arg) + (*arg);
         }
     };
 
@@ -53,10 +59,18 @@ fn main() {
     let arr = [1234u32, 2335u32];
 
     let result = unsafe {
+        // let compiled = engine
+        //     .get_function::<unsafe extern "C" fn(*const u32, usize) -> u32>("test")
+        //     .unwrap();
+        // compiled.call(arr.as_ptr(), 0)
+
+        let mut num = 0u32;
+        let num = &mut num as *mut u32;
         let compiled = engine
-            .get_function::<unsafe extern "C" fn(*const u32, usize) -> u32>("test")
+            .get_function::<unsafe extern "C" fn(*mut u32)>("mod_ptr")
             .unwrap();
-        compiled.call(arr.as_ptr(), 0)
+        compiled.call(num);
+        *num
     };
 
     println!("Result: {}", result);

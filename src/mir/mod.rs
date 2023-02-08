@@ -113,12 +113,16 @@ fn mir_parse_function(
     let final_expr = mir_parse_body(&function.body, &mut ctx)?;
     ctx.variables.pop_scope();
 
-    if !mir_is_empty_type(&final_expr.ty) {
-        let ret = MirStatement {
-            kind: MirStatementKind::Return(final_expr),
-        };
-        ctx.blocks.add_statement(ret);
-    }
+    let return_val = if !mir_is_empty_type(&final_expr.ty) {
+        Some(final_expr)
+    } else {
+        None
+    };
+
+    let ret = MirStatement {
+        kind: MirStatementKind::Return(return_val),
+    };
+    ctx.blocks.add_statement(ret);
 
     Ok(MirFunction {
         variables: ctx.variables.get_variables(),
@@ -197,7 +201,7 @@ fn mir_parse_body(body: &TreeBody, ctx: &mut MirExpressionContext) -> Result<Mir
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ExprLocation {
+pub enum ExprLocation {
     Root,
     NoDeref,
     Other,
@@ -230,7 +234,7 @@ fn mir_parse_expression(
             }
         }
         TreeExpressionKind::BinaryOpList(list) => mir_parse_binary_expr_list(list.clone(), ctx)?,
-        TreeExpressionKind::UnaryOp(unary) => mir_parse_unary_expr(unary, ctx)?,
+        TreeExpressionKind::UnaryOp(unary) => mir_parse_unary_expr(unary, ctx, pos)?,
         TreeExpressionKind::Group(inner) => mir_parse_body(inner, ctx)?,
         TreeExpressionKind::VarRead(read) => {
             let var = ctx.variables.get(&read.name).unwrap();
@@ -249,9 +253,14 @@ fn mir_parse_expression(
             let ptr = mir_parse_expression(&statement.ptr, ctx, ExprLocation::NoDeref)?;
             let value = mir_parse_expression(&statement.value, ctx, ExprLocation::Other)?;
 
+            dbg!(&statement.ptr);
+
             if let Some(ptr_ty) = ptr.ty.try_deref_ptr() {
                 if ptr_ty != &value.ty {
-                    panic!("Type mismatch in pointer assignment");
+                    panic!(
+                        "Type mismatch in pointer assignment: expected {:?}, got {:?}",
+                        ptr_ty, value.ty
+                    );
                 }
             } else {
                 panic!("Cannot assign to non-pointer");
@@ -303,7 +312,7 @@ fn mir_parse_expression(
         TreeExpressionKind::ReturnStatement(ret) => {
             let value = mir_parse_expression(&ret.value, ctx, ExprLocation::Other)?;
             ctx.blocks.add_statement(MirStatement {
-                kind: MirStatementKind::Return(value),
+                kind: MirStatementKind::Return(Some(value)),
             });
             mir_make_empty_expr()
         }

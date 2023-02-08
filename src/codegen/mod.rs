@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 
 use inkwell::{
     basic_block::BasicBlock,
@@ -46,6 +46,7 @@ pub struct LlvmCodegenModule<'ctx> {
     context: &'ctx Context,
     module: Module<'ctx>,
     builder: Builder<'ctx>,
+    llvm_intrinsics_added: HashSet<&'static str>,
 }
 
 impl<'ctx> LlvmCodegenModule<'ctx> {
@@ -153,6 +154,7 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
             module,
             builder,
             size_bits,
+            llvm_intrinsics_added: HashSet::new(),
         };
 
         let mut functions = Vec::new();
@@ -289,9 +291,13 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
         for statement in &body.statements {
             match &statement.kind {
                 MirStatementKind::Return(expr) => {
-                    let value = self.write_expression(&expr);
-                    if let Some(value) = value {
-                        self.module.builder.build_return(Some(&value));
+                    if let Some(expr) = expr {
+                        let value = self.write_expression(&expr);
+                        if let Some(value) = value {
+                            self.module.builder.build_return(Some(&value));
+                        } else {
+                            self.module.builder.build_return(None);
+                        }
                     } else {
                         self.module.builder.build_return(None);
                     }

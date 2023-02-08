@@ -25,7 +25,7 @@ pub enum MirStatementKind {
     PtrAssign(MirPtrAssign),
     Jump(MirJump),
     ConditionalJump(MirConditionalJump),
-    Return(MirExpression),
+    Return(Option<MirExpression>),
 }
 
 #[derive(Debug, Clone)]
