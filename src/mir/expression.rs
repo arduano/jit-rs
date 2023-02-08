@@ -1,6 +1,8 @@
+use crate::common::NumberKind;
+
 use super::{
-    variables::MirVariableDecl, MirIntrinsicBinaryOp, MirIntrinsicUnaryOp, MirLiteral, MirType,
-    MirVariable,
+    variables::MirVariableDecl, MirIntrinsicBinaryOp, MirIntrinsicUnaryOp,
+    MirIntrinsicVectorBinaryOp, MirLiteral, MirType, MirVariable,
 };
 
 #[derive(Debug, Clone)]
@@ -34,6 +36,7 @@ pub enum MirExpressionKind {
     PtrDeref(Box<MirPtrDeref>),
     Literal(MirLiteral),
     BinaryOp(Box<MirBinaryOp>),
+    VectorBinaryOp(Box<MirVectorBinaryOp>),
     UnaryOp(Box<MirUnaryOp>),
     NoValue,
 }
@@ -43,6 +46,15 @@ pub struct MirBinaryOp {
     pub lhs: MirExpression,
     pub rhs: MirExpression,
     pub op: MirIntrinsicBinaryOp,
+}
+
+#[derive(Debug, Clone)]
+pub struct MirVectorBinaryOp {
+    pub lhs: MirExpression,
+    pub rhs: MirExpression,
+    pub op: MirIntrinsicVectorBinaryOp,
+    pub scalar_ty: NumberKind,
+    pub width: u32,
 }
 
 #[derive(Debug, Clone)]

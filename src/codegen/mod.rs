@@ -1,4 +1,4 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
 use inkwell::{
     basic_block::BasicBlock,
@@ -8,15 +8,19 @@ use inkwell::{
     module::Module,
     passes::PassManager,
     targets::{CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetTriple},
-    types::BasicType,
-    values::{BasicValueEnum, FunctionValue, PointerValue},
-    AddressSpace, FloatPredicate, IntPredicate, OptimizationLevel,
+    types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FloatType, IntType, VectorType},
+    values::{BasicValueEnum, FunctionValue, PointerValue, VectorValue},
+    AddressSpace, OptimizationLevel,
 };
 
 use crate::{
     common::{FloatBits, IntBits, NumberKind},
     mir::*,
 };
+
+use self::intrinsics::{codegen_binary_expr, codegen_unary_expr, codegen_vector_binary_expr};
+
+mod intrinsics;
 
 pub struct LlvmCodegen {
     context: Context,
@@ -46,7 +50,7 @@ pub struct LlvmCodegenModule<'ctx> {
     context: &'ctx Context,
     module: Module<'ctx>,
     builder: Builder<'ctx>,
-    llvm_intrinsics_added: HashSet<&'static str>,
+    llvm_intrinsics_added: HashSet<String>,
 }
 
 impl<'ctx> LlvmCodegenModule<'ctx> {
@@ -149,7 +153,7 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
         #[cfg(target_pointer_width = "32")]
         let size_bits = SizeBits::Bits32;
 
-        let module = Self {
+        let mut module = Self {
             context,
             module,
             builder,
@@ -169,7 +173,7 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
         module
     }
 
-    fn get_int_type(&self, bits: &IntBits) -> inkwell::types::IntType<'ctx> {
+    fn get_int_type(&self, bits: &IntBits) -> IntType<'ctx> {
         match &bits {
             IntBits::Bits8 => self.context.i8_type(),
             IntBits::Bits16 => self.context.i16_type(),
@@ -182,14 +186,22 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
         }
     }
 
-    fn get_float_type(&self, bits: &FloatBits) -> inkwell::types::FloatType<'ctx> {
+    fn get_float_type(&self, bits: &FloatBits) -> FloatType<'ctx> {
         match &bits {
             FloatBits::Bits32 => self.context.f32_type(),
             FloatBits::Bits64 => self.context.f64_type(),
         }
     }
 
-    fn get_type(&self, ty: &MirType) -> inkwell::types::BasicTypeEnum<'ctx> {
+    fn get_vector_type(&self, ty: &NumberKind, width: u32) -> VectorType<'ctx> {
+        match &ty {
+            NumberKind::UnsignedInt(bits) => self.get_int_type(bits).vec_type(width),
+            NumberKind::SignedInt(bits) => self.get_int_type(bits).vec_type(width),
+            NumberKind::Float(bits) => self.get_float_type(bits).vec_type(width),
+        }
+    }
+
+    fn get_type(&self, ty: &MirType) -> BasicTypeEnum<'ctx> {
         match &ty.kind {
             MirTypeKind::Num(ty) => match ty {
                 NumberKind::UnsignedInt(bits) => self.get_int_type(bits).into(),
@@ -202,9 +214,7 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
             MirTypeKind::Never => panic!("Unexpected never type"),
             MirTypeKind::Ptr(ty) => self.get_type(ty).ptr_type(AddressSpace::default()).into(),
             MirTypeKind::ConstArray(ty, size) => self.get_type(ty).array_type(*size).into(),
-            MirTypeKind::Vector(ty, size) => {
-                self.get_type(ty).into_int_type().vec_type(*size).into()
-            }
+            MirTypeKind::Vector(ty, width) => self.get_vector_type(ty, *width).into(),
         }
     }
 
@@ -238,13 +248,29 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
         function
     }
 
-    fn implement_function(&self, function: &MirFunction, fn_value: FunctionValue<'ctx>) {
+    fn implement_function(&mut self, function: &MirFunction, fn_value: FunctionValue<'ctx>) {
         FunctionInsertContext::implement(self, function, fn_value);
+    }
+
+    fn insert_intrinsic(
+        &mut self,
+        name: String,
+        ret: BasicTypeEnum<'ctx>,
+        args: &[BasicMetadataTypeEnum<'ctx>],
+    ) -> FunctionValue<'ctx> {
+        if self.llvm_intrinsics_added.contains(&name) {
+            return self.module.get_function(&name).unwrap();
+        }
+
+        self.llvm_intrinsics_added.insert(name.clone());
+
+        let fn_type = ret.fn_type(args, false);
+        self.module.add_function(&name, fn_type, None)
     }
 }
 
 pub struct FunctionInsertContext<'ctx, 'a> {
-    module: &'a LlvmCodegenModule<'ctx>,
+    module: &'a mut LlvmCodegenModule<'ctx>,
     variables: Vec<PointerValue<'ctx>>,
     blocks: Vec<BasicBlock<'ctx>>,
     fn_value: FunctionValue<'ctx>,
@@ -252,7 +278,7 @@ pub struct FunctionInsertContext<'ctx, 'a> {
 
 impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
     fn implement(
-        module: &'a LlvmCodegenModule<'ctx>,
+        module: &'a mut LlvmCodegenModule<'ctx>,
         function: &MirFunction,
         fn_value: FunctionValue<'ctx>,
     ) {
@@ -260,8 +286,6 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
         for _ in 0..function.blocks.len() {
             blocks.push(module.context.append_basic_block(fn_value, "block"));
         }
-
-        module.builder.position_at_end(blocks[0]);
 
         let mut variables = Vec::new();
         for var in &function.variables {
@@ -278,7 +302,7 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
         };
 
         for (i, block) in function.blocks.iter().enumerate() {
-            module.builder.position_at_end(ctx.blocks[i]);
+            ctx.module.builder.position_at_end(ctx.blocks[i]);
             ctx.write_block(block);
         }
     }
@@ -365,312 +389,9 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
                 })
             }
             MirExpressionKind::NoValue => None,
-            MirExpressionKind::BinaryOp(op) => {
-                let lhs = self.write_expression(&op.lhs).unwrap();
-                let rhs = self.write_expression(&op.rhs).unwrap();
-
-                let builder = &self.module.builder;
-
-                match &op.op {
-                    MirIntrinsicBinaryOp::IntAdd => Some(
-                        builder
-                            .build_int_add(lhs.into_int_value(), rhs.into_int_value(), "add")
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::IntSub => Some(
-                        builder
-                            .build_int_sub(lhs.into_int_value(), rhs.into_int_value(), "sub")
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::IntMul => Some(
-                        builder
-                            .build_int_mul(lhs.into_int_value(), rhs.into_int_value(), "mul")
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::IntDiv => Some(
-                        builder
-                            .build_int_signed_div(lhs.into_int_value(), rhs.into_int_value(), "div")
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::UIntDiv => Some(
-                        builder
-                            .build_int_unsigned_div(
-                                lhs.into_int_value(),
-                                rhs.into_int_value(),
-                                "div",
-                            )
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::IntRem => Some(
-                        builder
-                            .build_int_signed_rem(lhs.into_int_value(), rhs.into_int_value(), "rem")
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::UIntRem => Some(
-                        builder
-                            .build_int_unsigned_rem(
-                                lhs.into_int_value(),
-                                rhs.into_int_value(),
-                                "rem",
-                            )
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::IntShl => Some(
-                        builder
-                            .build_left_shift(lhs.into_int_value(), rhs.into_int_value(), "shl")
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::IntShr => Some(
-                        builder
-                            .build_right_shift(
-                                lhs.into_int_value(),
-                                rhs.into_int_value(),
-                                true,
-                                "shr",
-                            )
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::UIntShr => Some(
-                        builder
-                            .build_right_shift(
-                                lhs.into_int_value(),
-                                rhs.into_int_value(),
-                                false,
-                                "shr",
-                            )
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::IntAnd => Some(
-                        builder
-                            .build_and(lhs.into_int_value(), rhs.into_int_value(), "and")
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::IntOr => Some(
-                        builder
-                            .build_or(lhs.into_int_value(), rhs.into_int_value(), "or")
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::IntXor => Some(
-                        builder
-                            .build_xor(lhs.into_int_value(), rhs.into_int_value(), "xor")
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::IntEq => Some(
-                        builder
-                            .build_int_compare(
-                                IntPredicate::EQ,
-                                lhs.into_int_value(),
-                                rhs.into_int_value(),
-                                "eq",
-                            )
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::IntNeq => Some(
-                        builder
-                            .build_int_compare(
-                                IntPredicate::NE,
-                                lhs.into_int_value(),
-                                rhs.into_int_value(),
-                                "ne",
-                            )
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::IntLt => Some(
-                        builder
-                            .build_int_compare(
-                                IntPredicate::SLT,
-                                lhs.into_int_value(),
-                                rhs.into_int_value(),
-                                "lt",
-                            )
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::IntLte => Some(
-                        builder
-                            .build_int_compare(
-                                IntPredicate::SLE,
-                                lhs.into_int_value(),
-                                rhs.into_int_value(),
-                                "le",
-                            )
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::IntGt => Some(
-                        builder
-                            .build_int_compare(
-                                IntPredicate::SGT,
-                                lhs.into_int_value(),
-                                rhs.into_int_value(),
-                                "gt",
-                            )
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::IntGte => Some(
-                        builder
-                            .build_int_compare(
-                                IntPredicate::SGE,
-                                lhs.into_int_value(),
-                                rhs.into_int_value(),
-                                "ge",
-                            )
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::UIntLt => Some(
-                        builder
-                            .build_int_compare(
-                                IntPredicate::ULT,
-                                lhs.into_int_value(),
-                                rhs.into_int_value(),
-                                "lt",
-                            )
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::UIntLte => Some(
-                        builder
-                            .build_int_compare(
-                                IntPredicate::ULE,
-                                lhs.into_int_value(),
-                                rhs.into_int_value(),
-                                "le",
-                            )
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::UIntGt => Some(
-                        builder
-                            .build_int_compare(
-                                IntPredicate::UGT,
-                                lhs.into_int_value(),
-                                rhs.into_int_value(),
-                                "gt",
-                            )
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::UIntGte => Some(
-                        builder
-                            .build_int_compare(
-                                IntPredicate::UGE,
-                                lhs.into_int_value(),
-                                rhs.into_int_value(),
-                                "ge",
-                            )
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::FloatAdd => Some(
-                        builder
-                            .build_float_add(lhs.into_float_value(), rhs.into_float_value(), "add")
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::FloatSub => Some(
-                        builder
-                            .build_float_sub(lhs.into_float_value(), rhs.into_float_value(), "sub")
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::FloatMul => Some(
-                        builder
-                            .build_float_mul(lhs.into_float_value(), rhs.into_float_value(), "mul")
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::FloatDiv => Some(
-                        builder
-                            .build_float_div(lhs.into_float_value(), rhs.into_float_value(), "div")
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::FloatRem => Some(
-                        builder
-                            .build_float_rem(lhs.into_float_value(), rhs.into_float_value(), "rem")
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::FloatEq => Some(
-                        builder
-                            .build_float_compare(
-                                FloatPredicate::OEQ,
-                                lhs.into_float_value(),
-                                rhs.into_float_value(),
-                                "eq",
-                            )
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::FloatNeq => Some(
-                        builder
-                            .build_float_compare(
-                                FloatPredicate::ONE,
-                                lhs.into_float_value(),
-                                rhs.into_float_value(),
-                                "ne",
-                            )
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::FloatLt => Some(
-                        builder
-                            .build_float_compare(
-                                FloatPredicate::OLT,
-                                lhs.into_float_value(),
-                                rhs.into_float_value(),
-                                "lt",
-                            )
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::FloatLte => Some(
-                        builder
-                            .build_float_compare(
-                                FloatPredicate::OLE,
-                                lhs.into_float_value(),
-                                rhs.into_float_value(),
-                                "le",
-                            )
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::FloatGt => Some(
-                        builder
-                            .build_float_compare(
-                                FloatPredicate::OGT,
-                                lhs.into_float_value(),
-                                rhs.into_float_value(),
-                                "gt",
-                            )
-                            .into(),
-                    ),
-                    MirIntrinsicBinaryOp::FloatGte => Some(
-                        builder
-                            .build_float_compare(
-                                FloatPredicate::OGE,
-                                lhs.into_float_value(),
-                                rhs.into_float_value(),
-                                "ge",
-                            )
-                            .into(),
-                    ),
-                }
-            }
-            MirExpressionKind::UnaryOp(op) => {
-                let operand = self.write_expression(&op.operand).unwrap();
-
-                let builder = &self.module.builder;
-
-                match &op.op {
-                    MirIntrinsicUnaryOp::IntNeg => Some(
-                        builder
-                            .build_int_neg(operand.into_int_value(), "neg")
-                            .into(),
-                    ),
-                    MirIntrinsicUnaryOp::FloatNeg => Some(
-                        builder
-                            .build_float_neg(operand.into_float_value(), "neg")
-                            .into(),
-                    ),
-                    MirIntrinsicUnaryOp::BoolNot => {
-                        Some(builder.build_not(operand.into_int_value(), "not").into())
-                    }
-                    MirIntrinsicUnaryOp::PointerDeref => {
-                        let ptr = operand.into_pointer_value();
-                        let pointee_ty = self.get_type(&expr.ty);
-
-                        let value = builder.build_load(pointee_ty, ptr, "deref");
-
-                        Some(value.into())
-                    }
-                }
-            }
+            MirExpressionKind::BinaryOp(op) => codegen_binary_expr(op, self),
+            MirExpressionKind::VectorBinaryOp(op) => codegen_vector_binary_expr(op, self),
+            MirExpressionKind::UnaryOp(op) => codegen_unary_expr(op, &expr.ty, self),
             MirExpressionKind::IndexPtr(index_ptr) => {
                 let value = self.write_expression(&index_ptr.value).unwrap();
                 let index = self.write_expression(&index_ptr.index).unwrap();
@@ -699,5 +420,49 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
                 Some(value.into())
             }
         }
+    }
+
+    fn call_vector_arithmetic_intrinsic(
+        &mut self,
+        left: VectorValue<'ctx>,
+        right: VectorValue<'ctx>,
+        name: &'static str,
+        ty: NumberKind,
+        width: u32,
+    ) -> BasicValueEnum<'ctx> {
+        let vector_ty = self.module.get_vector_type(&ty, width);
+        let mask_ty = self.module.context.bool_type().vec_type(width);
+        let i32_ty = self.module.context.i32_type();
+
+        let is_invalid_ty = match ty {
+            NumberKind::SignedInt(IntBits::BitsSize)
+            | NumberKind::UnsignedInt(IntBits::BitsSize) => true,
+            _ => false,
+        };
+
+        if is_invalid_ty {
+            panic!("Invalid type for vector arithmetic intrinsic");
+        }
+
+        let intrinsic_name = format!("llvm.vp.{}.v{}{}", name, width, ty);
+
+        let params = vec![
+            vector_ty.into(),
+            vector_ty.into(),
+            mask_ty.into(),
+            i32_ty.into(),
+        ];
+
+        let func = self
+            .module
+            .insert_intrinsic(intrinsic_name, vector_ty.into(), &params);
+
+        let mask = mask_ty.const_zero();
+        let size = i32_ty.const_int(width as u64, false);
+
+        let args = vec![left.into(), right.into(), mask.into(), size.into()];
+        let result = self.module.builder.build_call(func, &args, &name);
+
+        result.try_as_basic_value().left().unwrap()
     }
 }

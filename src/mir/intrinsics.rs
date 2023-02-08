@@ -37,6 +37,33 @@ pub enum MirIntrinsicBinaryOp {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum MirIntrinsicVectorBinaryOp {
+    IntAdd,
+    IntSub,
+    IntMul,
+    IntDiv,
+    UIntDiv,
+    IntRem,
+    UIntRem,
+    IntShl,
+    IntShr,
+    UIntShr,
+    IntAnd,
+    IntOr,
+    IntXor,
+    IntMax,
+    IntMin,
+    IntUMax,
+    IntUMin,
+
+    FloatAdd,
+    FloatSub,
+    FloatMul,
+    FloatDiv,
+    FloatRem,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MirIntrinsicUnaryOp {
     IntNeg,
     FloatNeg,

@@ -25,9 +25,9 @@ fn main() {
         pub fn mod_ptr(arg: *u32) {
             *arg = 10u32;
         }
-        pub fn vec_add(arg: *<u32; 8usize>) {
-            *arg = (*arg) + (*arg);
-        }
+        // pub fn vec_add(arg: *<u32; 8usize>) {
+        //     *arg = (*arg) + (*arg);
+        // }
     };
 
     println!("{}", &tokens);

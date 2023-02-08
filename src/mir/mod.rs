@@ -178,6 +178,18 @@ fn mir_parse_type(ty: &TreeType) -> Result<MirType, ()> {
 
             base(MirTypeKind::ConstArray(Box::new(ty), *size))
         }
+        TreeType::Vector(ty, width) => {
+            let ty = mir_parse_type(&ty)?;
+
+            let ty = match ty.kind {
+                MirTypeKind::Num(ty) => ty,
+                _ => {
+                    panic!("Unsupported vector type: {:?}", ty);
+                }
+            };
+
+            base(MirTypeKind::Vector(ty, *width))
+        }
     })
 }
 

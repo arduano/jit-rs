@@ -32,7 +32,7 @@ pub enum MirTypeKind {
     Num(NumberKind),
     Ptr(Box<MirType>),
     ConstArray(Box<MirType>, u32),
-    Vector(Box<MirType>, u32),
+    Vector(NumberKind, u32),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

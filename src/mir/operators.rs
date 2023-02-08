@@ -1,5 +1,6 @@
 use crate::{
-    common::NumberKind,
+    common::{IntBits, NumberKind},
+    mir::MirVectorBinaryOp,
     tree_parser::{
         TreeBinaryOpKind, TreeBinaryOpList, TreeExpression, TreeUnaryOp, TreeUnaryOpKind,
     },
@@ -7,7 +8,8 @@ use crate::{
 
 use super::{
     mir_parse_expression, ExprLocation, MirBinaryOp, MirExpression, MirExpressionContext,
-    MirExpressionKind, MirIntrinsicBinaryOp, MirIntrinsicUnaryOp, MirType, MirTypeKind, MirUnaryOp,
+    MirExpressionKind, MirIntrinsicBinaryOp, MirIntrinsicUnaryOp, MirIntrinsicVectorBinaryOp,
+    MirType, MirTypeKind, MirUnaryOp,
 };
 
 #[derive(Debug, Clone)]
@@ -50,7 +52,7 @@ fn mir_parse_binary_expr_slice(
 ) -> Result<MirExpression, ()> {
     if expr.is_empty() {
         let right = mir_parse_expression(&expr.get_last(), ctx, ExprLocation::Other)?;
-        return seal_mir_parse_binary_expr(left, op1, right);
+        return seal_mir_binary_expr(left, op1, right);
     }
 
     let (right, op2) = expr.advance();
@@ -60,11 +62,11 @@ fn mir_parse_binary_expr_slice(
     let op2_prec = mir_op_precedence(op2);
 
     let expr = if op1_prec < op2_prec {
-        let sealed = seal_mir_parse_binary_expr(left, op1, right)?;
+        let sealed = seal_mir_binary_expr(left, op1, right)?;
         mir_parse_binary_expr_slice(sealed, op2, expr, ctx)?
     } else {
         let right = mir_parse_binary_expr_slice(right, op2, expr, ctx)?;
-        seal_mir_parse_binary_expr(left, op1, right)?
+        seal_mir_binary_expr(left, op1, right)?
     };
 
     Ok(expr)
@@ -89,11 +91,14 @@ fn mir_op_precedence(op: TreeBinaryOpKind) -> u32 {
     }
 }
 
-fn seal_mir_parse_binary_expr(
+fn seal_mir_binary_expr(
     left: MirExpression,
     op: TreeBinaryOpKind,
     right: MirExpression,
 ) -> Result<MirExpression, ()> {
+    use MirIntrinsicBinaryOp as Op;
+    use MirIntrinsicVectorBinaryOp as VOp;
+
     let bool_ty = MirType {
         kind: MirTypeKind::Bool,
     };
@@ -199,132 +204,110 @@ fn seal_mir_parse_binary_expr(
             },
             bool_ty,
         ),
-        TreeBinaryOpKind::Add => (
-            {
-                if &left.ty != &right.ty {
-                    return Err(());
-                } else {
-                    if is_float_type(&left.ty) {
-                        MirIntrinsicBinaryOp::FloatAdd
-                    } else if is_int_type(&left.ty) {
-                        MirIntrinsicBinaryOp::IntAdd
-                    } else {
-                        return Err(());
-                    }
-                }
-            },
-            left.ty.clone(),
-        ),
-        TreeBinaryOpKind::Sub => (
-            {
-                if &left.ty != &right.ty {
-                    return Err(());
-                } else {
-                    if is_float_type(&left.ty) {
-                        MirIntrinsicBinaryOp::FloatSub
-                    } else if is_int_type(&left.ty) {
-                        MirIntrinsicBinaryOp::IntSub
-                    } else {
-                        return Err(());
-                    }
-                }
-            },
-            left.ty.clone(),
-        ),
-        TreeBinaryOpKind::Mul => (
-            {
-                if &left.ty != &right.ty {
-                    return Err(());
-                } else {
-                    if is_float_type(&left.ty) {
-                        MirIntrinsicBinaryOp::FloatMul
-                    } else if is_int_type(&left.ty) {
-                        MirIntrinsicBinaryOp::IntMul
-                    } else {
-                        return Err(());
-                    }
-                }
-            },
-            left.ty.clone(),
-        ),
-        TreeBinaryOpKind::Div => (
-            {
-                if &left.ty != &right.ty {
-                    return Err(());
-                } else {
-                    if is_float_type(&left.ty) {
-                        MirIntrinsicBinaryOp::FloatDiv
-                    } else if is_uint_type(&left.ty) {
-                        MirIntrinsicBinaryOp::UIntDiv
-                    } else if is_sint_type(&left.ty) {
-                        MirIntrinsicBinaryOp::IntDiv
-                    } else {
-                        return Err(());
-                    }
-                }
-            },
-            left.ty.clone(),
-        ),
-        TreeBinaryOpKind::Mod => (
-            {
-                if &left.ty != &right.ty {
-                    return Err(());
-                } else {
-                    if is_float_type(&left.ty) {
-                        MirIntrinsicBinaryOp::FloatRem
-                    } else if is_uint_type(&left.ty) {
-                        MirIntrinsicBinaryOp::UIntRem
-                    } else if is_sint_type(&left.ty) {
-                        MirIntrinsicBinaryOp::IntRem
-                    } else {
-                        return Err(());
-                    }
-                }
-            },
-            left.ty.clone(),
-        ),
-        TreeBinaryOpKind::BinaryAnd => (
-            {
-                if &left.ty != &right.ty {
-                    return Err(());
-                } else {
-                    if is_int_type(&left.ty) {
-                        MirIntrinsicBinaryOp::IntAnd
-                    } else {
-                        return Err(());
-                    }
-                }
-            },
-            left.ty.clone(),
-        ),
-        TreeBinaryOpKind::BinaryOr => (
-            {
-                if &left.ty != &right.ty {
-                    return Err(());
-                } else {
-                    if is_int_type(&left.ty) {
-                        MirIntrinsicBinaryOp::IntOr
-                    } else {
-                        return Err(());
-                    }
-                }
-            },
-            left.ty.clone(),
-        ),
-        TreeBinaryOpKind::BinaryXor => (
-            {
-                if &left.ty != &right.ty {
-                    return Err(());
-                } else {
-                    if is_int_type(&left.ty) {
-                        MirIntrinsicBinaryOp::IntXor
-                    } else {
-                        return Err(());
-                    }
-                }
-            },
-            left.ty.clone(),
-        ),
+        TreeBinaryOpKind::Add => {
+            return seal_mir_arithmetic_expr(
+                (left, op, right),
+                ArithmeticOperations {
+                    float: Some(Op::FloatAdd),
+                    uint: Some(Op::IntAdd),
+                    sint: Some(Op::IntAdd),
+                    vec_float: Some(VOp::FloatAdd),
+                    vec_uint: Some(VOp::IntAdd),
+                    vec_sint: Some(VOp::IntAdd),
+                },
+            )
+        }
+        TreeBinaryOpKind::Sub => {
+            return seal_mir_arithmetic_expr(
+                (left, op, right),
+                ArithmeticOperations {
+                    float: Some(Op::FloatSub),
+                    uint: Some(Op::IntSub),
+                    sint: Some(Op::IntSub),
+                    vec_float: Some(VOp::FloatSub),
+                    vec_uint: Some(VOp::IntSub),
+                    vec_sint: Some(VOp::IntSub),
+                },
+            )
+        }
+        TreeBinaryOpKind::Mul => {
+            return seal_mir_arithmetic_expr(
+                (left, op, right),
+                ArithmeticOperations {
+                    float: Some(Op::FloatMul),
+                    uint: Some(Op::IntMul),
+                    sint: Some(Op::IntMul),
+                    vec_float: Some(VOp::FloatMul),
+                    vec_uint: Some(VOp::IntMul),
+                    vec_sint: Some(VOp::IntMul),
+                },
+            )
+        }
+        TreeBinaryOpKind::Div => {
+            return seal_mir_arithmetic_expr(
+                (left, op, right),
+                ArithmeticOperations {
+                    float: Some(Op::FloatDiv),
+                    uint: Some(Op::UIntDiv),
+                    sint: Some(Op::IntDiv),
+                    vec_float: Some(VOp::FloatDiv),
+                    vec_uint: Some(VOp::UIntDiv),
+                    vec_sint: Some(VOp::IntDiv),
+                },
+            )
+        }
+        TreeBinaryOpKind::Mod => {
+            return seal_mir_arithmetic_expr(
+                (left, op, right),
+                ArithmeticOperations {
+                    float: Some(Op::FloatRem),
+                    uint: Some(Op::UIntRem),
+                    sint: Some(Op::IntRem),
+                    vec_float: Some(VOp::FloatRem),
+                    vec_uint: Some(VOp::UIntRem),
+                    vec_sint: Some(VOp::IntRem),
+                },
+            )
+        }
+        TreeBinaryOpKind::BinaryAnd => {
+            return seal_mir_arithmetic_expr(
+                (left, op, right),
+                ArithmeticOperations {
+                    float: None,
+                    uint: Some(Op::IntAnd),
+                    sint: Some(Op::IntAnd),
+                    vec_float: None,
+                    vec_uint: Some(VOp::IntAnd),
+                    vec_sint: Some(VOp::IntAnd),
+                },
+            )
+        }
+        TreeBinaryOpKind::BinaryOr => {
+            return seal_mir_arithmetic_expr(
+                (left, op, right),
+                ArithmeticOperations {
+                    float: None,
+                    uint: Some(Op::IntOr),
+                    sint: Some(Op::IntOr),
+                    vec_float: None,
+                    vec_uint: Some(VOp::IntOr),
+                    vec_sint: Some(VOp::IntOr),
+                },
+            )
+        }
+        TreeBinaryOpKind::BinaryXor => {
+            return seal_mir_arithmetic_expr(
+                (left, op, right),
+                ArithmeticOperations {
+                    float: None,
+                    uint: Some(Op::IntXor),
+                    sint: Some(Op::IntXor),
+                    vec_float: None,
+                    vec_uint: Some(VOp::IntXor),
+                    vec_sint: Some(VOp::IntXor),
+                },
+            )
+        }
     };
 
     Ok(MirExpression {
@@ -335,6 +318,81 @@ fn seal_mir_parse_binary_expr(
             rhs: right,
         })),
     })
+}
+
+type MirExprData = (MirExpression, TreeBinaryOpKind, MirExpression);
+
+struct ArithmeticOperations {
+    float: Option<MirIntrinsicBinaryOp>,
+    uint: Option<MirIntrinsicBinaryOp>,
+    sint: Option<MirIntrinsicBinaryOp>,
+    vec_float: Option<MirIntrinsicVectorBinaryOp>,
+    vec_uint: Option<MirIntrinsicVectorBinaryOp>,
+    vec_sint: Option<MirIntrinsicVectorBinaryOp>,
+}
+
+fn seal_mir_arithmetic_expr(
+    data: MirExprData,
+    ops: ArithmeticOperations,
+) -> Result<MirExpression, ()> {
+    let (left, tree_op, right) = data;
+
+    if &left.ty != &right.ty {
+        panic!(
+            "Operator {:?} not allowed between {:?} and {:?}",
+            tree_op, left.ty, right.ty
+        )
+    }
+
+    let basic_op = match &left.ty.kind {
+        MirTypeKind::Num(ty) => match ty {
+            NumberKind::Float(_) => ops.float,
+            NumberKind::SignedInt(_) => ops.sint,
+            NumberKind::UnsignedInt(_) => ops.uint,
+        },
+        _ => None,
+    };
+
+    if let Some(op) = basic_op {
+        return Ok(MirExpression {
+            ty: left.ty.clone(),
+            kind: MirExpressionKind::BinaryOp(Box::new(MirBinaryOp {
+                op,
+                lhs: left,
+                rhs: right,
+            })),
+        });
+    }
+
+    let vector_op = match &left.ty.kind {
+        MirTypeKind::Vector(ty, width) => match ty {
+            NumberKind::SignedInt(IntBits::BitsSize)
+            | NumberKind::UnsignedInt(IntBits::BitsSize) => None,
+
+            NumberKind::Float(_) => ops.vec_float,
+            NumberKind::SignedInt(_) => ops.vec_sint,
+            NumberKind::UnsignedInt(_) => ops.vec_uint,
+        }
+        .map(|op| (op, *ty, *width)),
+        _ => None,
+    };
+
+    if let Some((op, ty, width)) = vector_op {
+        return Ok(MirExpression {
+            ty: left.ty.clone(),
+            kind: MirExpressionKind::VectorBinaryOp(Box::new(MirVectorBinaryOp {
+                op,
+                lhs: left,
+                rhs: right,
+                scalar_ty: ty,
+                width,
+            })),
+        });
+    }
+
+    panic!("Operator {:?} not allowed for {:?}", tree_op, left.ty);
+    #[allow(unreachable_code)]
+    Err(())
 }
 
 pub fn mir_parse_unary_expr(

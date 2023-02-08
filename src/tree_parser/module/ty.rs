@@ -15,6 +15,7 @@ use super::TreeNumberLiteral;
 pub enum TreeType {
     Base(BaseTreeType),
     ConstArray(Box<TreeType>, u32),
+    Vector(Box<TreeType>, u32),
     Ptr(Box<TreeType>),
 }
 
@@ -59,8 +60,8 @@ impl TreeType {
 
             let size =
                 get_required_val!(inner_cursor, TreeNumberLiteral::parse(inner_cursor.clone()));
-            if size.ty != NumberKind::UnsignedInt(IntBits::Bits32) {
-                return ParseResult::error("expected 32-bit unsigned integer");
+            if size.ty != NumberKind::UnsignedInt(IntBits::BitsSize) {
+                return ParseResult::error("expected usize integer");
             }
 
             let Ok(size) = size.value.parse() else {
@@ -87,8 +88,8 @@ impl TreeType {
 
             let size = get_required_val!(cursor, TreeNumberLiteral::parse(cursor.clone()));
 
-            if size.ty != NumberKind::UnsignedInt(IntBits::Bits32) {
-                return ParseResult::error("expected 32-bit unsigned integer");
+            if size.ty != NumberKind::UnsignedInt(IntBits::BitsSize) {
+                return ParseResult::error("expected usize integer");
             }
 
             let Ok(size) = size.value.parse() else {
@@ -99,7 +100,7 @@ impl TreeType {
                 return ParseResult::error("expected end of brackets");
             }
 
-            ParseResult::Ok(cursor, Self::ConstArray(Box::new(inner_ty), size))
+            ParseResult::Ok(cursor, Self::Vector(Box::new(inner_ty), size))
         } else {
             ParseResult::no_match("const array type")
         }
