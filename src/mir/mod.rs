@@ -1,11 +1,11 @@
 mod blocks;
 mod expression;
 mod intrinsics;
+mod misc;
 mod operators;
 mod statement;
 mod structures;
 mod ty;
-mod misc;
 mod variables;
 
 pub use expression::*;
