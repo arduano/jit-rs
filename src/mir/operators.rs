@@ -9,7 +9,7 @@ use crate::{
 use super::{
     mir_parse_expression, ExprLocation, MirBinaryOp, MirExpression, MirExpressionContext,
     MirExpressionKind, MirIntrinsicBinaryOp, MirIntrinsicUnaryOp, MirIntrinsicVectorBinaryOp,
-    MirType, MirTypeKind, MirUnaryOp,
+    MirType, MirUnaryOp,
 };
 
 #[derive(Debug, Clone)]
@@ -99,10 +99,6 @@ fn seal_mir_binary_expr(
     use MirIntrinsicBinaryOp as Op;
     use MirIntrinsicVectorBinaryOp as VOp;
 
-    let bool_ty = MirType {
-        kind: MirTypeKind::Bool,
-    };
-
     let (op, ty) = match op {
         TreeBinaryOpKind::Lt => (
             if &left.ty != &right.ty {
@@ -118,7 +114,7 @@ fn seal_mir_binary_expr(
                     return Err(());
                 }
             },
-            bool_ty,
+            MirType::Bool,
         ),
         TreeBinaryOpKind::Gt => (
             if &left.ty != &right.ty {
@@ -134,7 +130,7 @@ fn seal_mir_binary_expr(
                     return Err(());
                 }
             },
-            bool_ty,
+            MirType::Bool,
         ),
         TreeBinaryOpKind::Lte => (
             {
@@ -152,7 +148,7 @@ fn seal_mir_binary_expr(
                     }
                 }
             },
-            bool_ty,
+            MirType::Bool,
         ),
         TreeBinaryOpKind::Gte => (
             {
@@ -170,7 +166,7 @@ fn seal_mir_binary_expr(
                     }
                 }
             },
-            bool_ty,
+            MirType::Bool,
         ),
         TreeBinaryOpKind::Eq => (
             {
@@ -186,7 +182,7 @@ fn seal_mir_binary_expr(
                     }
                 }
             },
-            bool_ty,
+            MirType::Bool,
         ),
         TreeBinaryOpKind::Neq => (
             {
@@ -202,7 +198,7 @@ fn seal_mir_binary_expr(
                     }
                 }
             },
-            bool_ty,
+            MirType::Bool,
         ),
         TreeBinaryOpKind::Add => {
             return seal_mir_arithmetic_expr(
@@ -337,9 +333,9 @@ fn seal_mir_arithmetic_expr(
 ) -> Result<MirExpression, ()> {
     let (left, tree_op, right) = data;
 
-    match (&left.ty.kind, &right.ty.kind) {
+    match (&left.ty, &right.ty) {
         // Unit operations
-        (&MirTypeKind::Num(lty), &MirTypeKind::Num(rty)) => {
+        (&MirType::Num(lty), &MirType::Num(rty)) => {
             if lty != rty {
                 panic!(
                     "Operator {:?} not allowed between {:?} and {:?}",
@@ -364,7 +360,7 @@ fn seal_mir_arithmetic_expr(
                 });
             }
         }
-        (&MirTypeKind::Vector(lty, lwidth), &MirTypeKind::Vector(rty, rwidth)) => {
+        (&MirType::Vector(lty, lwidth), &MirType::Vector(rty, rwidth)) => {
             if lty != rty || lwidth != rwidth {
                 panic!(
                     "Operator {:?} not allowed between {:?} and {:?}",
@@ -395,7 +391,7 @@ fn seal_mir_arithmetic_expr(
             }
         }
 
-        (&MirTypeKind::Num(lty), &MirTypeKind::Vector(rty, rwidth)) => {
+        (&MirType::Num(lty), &MirType::Vector(rty, rwidth)) => {
             if lty != rty {
                 panic!(
                     "Operator {:?} not allowed between {:?} and {:?}",
@@ -406,7 +402,7 @@ fn seal_mir_arithmetic_expr(
             let left = mir_extend_num_to_vector(left, rwidth)?;
             return seal_mir_arithmetic_expr((left, tree_op, right), ops);
         }
-        (&MirTypeKind::Vector(lty, lwidth), &MirTypeKind::Num(rty)) => {
+        (&MirType::Vector(lty, lwidth), &MirType::Num(rty)) => {
             if lty != rty {
                 panic!(
                     "Operator {:?} not allowed between {:?} and {:?}",
@@ -468,22 +464,22 @@ pub fn mir_parse_unary_expr(
 }
 
 fn is_float_type(ty: &MirType) -> bool {
-    match &ty.kind {
-        MirTypeKind::Num(NumberKind::Float(_)) => true,
+    match &ty {
+        MirType::Num(NumberKind::Float(_)) => true,
         _ => false,
     }
 }
 
 fn is_uint_type(ty: &MirType) -> bool {
-    match &ty.kind {
-        MirTypeKind::Num(NumberKind::UnsignedInt(_)) => true,
+    match &ty {
+        MirType::Num(NumberKind::UnsignedInt(_)) => true,
         _ => false,
     }
 }
 
 fn is_sint_type(ty: &MirType) -> bool {
-    match &ty.kind {
-        MirTypeKind::Num(NumberKind::SignedInt(_)) => true,
+    match &ty {
+        MirType::Num(NumberKind::SignedInt(_)) => true,
         _ => false,
     }
 }
@@ -493,8 +489,8 @@ fn is_int_type(ty: &MirType) -> bool {
 }
 
 fn is_ptr_type(ty: &MirType) -> bool {
-    match &ty.kind {
-        MirTypeKind::Ptr(_) => true,
+    match &ty {
+        MirType::Ptr(_) => true,
         _ => false,
     }
 }

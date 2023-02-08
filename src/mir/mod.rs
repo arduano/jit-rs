@@ -1,3 +1,4 @@
+mod assertions;
 mod blocks;
 mod expression;
 mod intrinsics;
@@ -22,7 +23,13 @@ use crate::{
     },
 };
 
-use self::{blocks::MirBlockBuilder, operators::mir_parse_unary_expr, variables::VariableStorage};
+use self::{
+    assertions::{mir_assert_is_boolean, mir_assert_types_equal},
+    blocks::MirBlockBuilder,
+    misc::{mir_is_empty_type, mir_make_empty_expr},
+    operators::mir_parse_unary_expr,
+    variables::VariableStorage,
+};
 
 struct MirFunctionContext<'a> {
     functions: &'a [MirFunctionDeclaration],
@@ -55,7 +62,7 @@ pub fn mir_parse_module(module: &TreeModule) -> Result<MirModule, ()> {
                     functions: &function_decls,
                     return_ty: match function.ret_type {
                         Some(ref ty) => mir_parse_type(ty)?,
-                        None => mir_get_void_type(),
+                        None => MirType::Void,
                     },
                 },
             )
@@ -69,7 +76,7 @@ pub fn mir_parse_function_decl(function: &TreeFunction) -> Result<MirFunctionDec
     Ok(MirFunctionDeclaration {
         ret_type: match function.ret_type {
             Some(ref ty) => mir_parse_type(ty)?,
-            None => mir_get_void_type(),
+            None => MirType::Void,
         },
         name: function.name.clone(),
         args: function
@@ -124,12 +131,7 @@ fn mir_parse_function(
     let final_expr = mir_parse_body(&function.body, &mut ctx)?;
     ctx.variables.pop_scope();
 
-    if final_expr.ty != ctx.fn_ctx.return_ty {
-        panic!(
-            "Type mismatch in return statement: expected {:?}, got {:?}",
-            ctx.fn_ctx.return_ty, final_expr.ty
-        );
-    }
+    mir_assert_types_equal(&final_expr.ty, &ctx.fn_ctx.return_ty)?;
 
     let return_val = if !mir_is_empty_type(&final_expr.ty) {
         Some(final_expr)
@@ -150,12 +152,8 @@ fn mir_parse_function(
 }
 
 fn mir_parse_type(ty: &TreeType) -> Result<MirType, ()> {
-    fn base(kind: MirTypeKind) -> MirType {
-        MirType { kind }
-    }
-
     fn number(ty: NumberKind) -> MirType {
-        base(MirTypeKind::Num(ty))
+        MirType::Num(ty)
     }
 
     fn float(bits: FloatBits) -> MirType {
@@ -184,44 +182,38 @@ fn mir_parse_type(ty: &TreeType) -> Result<MirType, ()> {
             "isize" => sint(IntBits::BitsSize),
             "f32" => float(FloatBits::Bits32),
             "f64" => float(FloatBits::Bits64),
-            "bool" => base(MirTypeKind::Bool),
+            "bool" => MirType::Bool,
             _ => {
                 panic!("Unsupported type: {}", ty.name);
             }
         },
 
-        TreeType::Ptr(ty) => base(MirTypeKind::Ptr(Box::new(mir_parse_type(&ty)?))),
+        TreeType::Ptr(ty) => MirType::Ptr(Box::new(mir_parse_type(&ty)?)),
         TreeType::ConstArray(ty, size) => {
             let ty = mir_parse_type(&ty)?;
 
-            base(MirTypeKind::ConstArray(Box::new(ty), *size))
+            MirType::ConstArray(Box::new(ty), *size)
         }
         TreeType::Vector(ty, width) => {
             let ty = mir_parse_type(&ty)?;
 
-            let ty = match ty.kind {
-                MirTypeKind::Num(ty) => ty,
+            let ty = match ty {
+                MirType::Num(ty) => ty,
                 _ => {
                     panic!("Unsupported vector type: {:?}", ty);
                 }
             };
 
-            base(MirTypeKind::Vector(ty, *width))
+            MirType::Vector(ty, *width)
         }
     })
-}
-
-fn mir_get_void_type() -> MirType {
-    MirType {
-        kind: MirTypeKind::Void,
-    }
 }
 
 fn mir_parse_body(body: &TreeBody, ctx: &mut MirExpressionContext) -> Result<MirExpression, ()> {
     if body.body.is_empty() {
         return Ok(MirExpression {
             kind: MirExpressionKind::NoValue,
-            ty: mir_get_void_type(),
+            ty: MirType::Void,
         });
     }
 
@@ -293,12 +285,7 @@ fn mir_parse_expression(
             dbg!(&statement.ptr);
 
             if let Some(ptr_ty) = ptr.ty.try_deref_ptr() {
-                if ptr_ty != &value.ty {
-                    panic!(
-                        "Type mismatch in pointer assignment: expected {:?}, got {:?}",
-                        ptr_ty, value.ty
-                    );
-                }
+                mir_assert_types_equal(&ptr_ty, &value.ty)?;
             } else {
                 panic!("Cannot assign to non-pointer");
             }
@@ -335,25 +322,16 @@ fn mir_parse_expression(
 
             MirExpression {
                 kind: MirExpressionKind::Literal(literal),
-                ty: MirType {
-                    kind: MirTypeKind::Num(num.ty),
-                },
+                ty: MirType::Num(num.ty),
             }
         }
         TreeExpressionKind::Bool(bool) => MirExpression {
             kind: MirExpressionKind::Literal(MirLiteral::Bool(bool.value)),
-            ty: MirType {
-                kind: MirTypeKind::Bool,
-            },
+            ty: MirType::Bool,
         },
         TreeExpressionKind::ReturnStatement(ret) => {
             let value = mir_parse_expression(&ret.value, ctx, ExprLocation::Other)?;
-            if value.ty != ctx.fn_ctx.return_ty {
-                panic!(
-                    "Type mismatch in return statement: expected {:?}, got {:?}",
-                    ctx.fn_ctx.return_ty, value.ty
-                );
-            }
+            mir_assert_types_equal(&value.ty, &ctx.fn_ctx.return_ty)?;
 
             ctx.blocks.add_statement(MirStatement {
                 kind: MirStatementKind::Return(Some(value)),
@@ -374,6 +352,7 @@ fn mir_parse_expression(
 
             ctx.blocks.select_block(loop_start);
             let cond = mir_parse_expression(&statement.cond, ctx, ExprLocation::Other)?;
+            mir_assert_is_boolean(&cond.ty)?;
 
             let jump = MirStatement {
                 kind: MirStatementKind::ConditionalJump(MirConditionalJump {
@@ -403,16 +382,16 @@ fn mir_parse_expression(
             let ptr = mir_parse_expression(&index.ptr, ctx, ExprLocation::NoDeref)?;
             let index = mir_parse_expression(&index.index, ctx, ExprLocation::Other)?;
 
-            match &index.ty.kind {
-                MirTypeKind::Num(NumberKind::UnsignedInt(IntBits::BitsSize)) => {}
+            match &index.ty {
+                MirType::Num(NumberKind::UnsignedInt(IntBits::BitsSize)) => {}
                 _ => panic!("Unexpected value type for index operation"),
             }
 
             // TODO: Error if this isn't a ptr. We can only index ptr types.
             let ty_inside_ptr = ptr.ty.deref_ptr().clone();
 
-            let value = match &ty_inside_ptr.kind {
-                MirTypeKind::Ptr(ty) => {
+            let value = match &ty_inside_ptr {
+                MirType::Ptr(ty) => {
                     // From: parent ptr -> ptr -> value
                     // To: (derefed -> ) indexed ptr -> value
 
@@ -427,7 +406,7 @@ fn mir_parse_expression(
                         })),
                     }
                 }
-                MirTypeKind::ConstArray(ty, _) => {
+                MirType::ConstArray(ty, _) => {
                     // From: parent ptr -> [array -> value]
                     // To: indexed ptr -> value
 
@@ -443,13 +422,11 @@ fn mir_parse_expression(
                         })),
                     }
                 }
-                MirTypeKind::Vector(ty, _) => {
+                MirType::Vector(ty, _) => {
                     // From: parent ptr -> [array -> value]
                     // To: indexed ptr -> value
 
-                    let ty = MirType {
-                        kind: MirTypeKind::Num(*ty),
-                    };
+                    let ty = MirType::Num(*ty);
 
                     let new_ty = ty.as_ptr();
 
@@ -474,7 +451,7 @@ fn mir_parse_expression(
         TreeExpressionKind::VoidValue(expr) => {
             // Pass pos across, because void is just a marker expression
             let mut value = mir_parse_expression(&expr, ctx, pos)?;
-            value.ty = mir_get_void_type();
+            value.ty = MirType::Void;
 
             value
         }
@@ -500,6 +477,8 @@ fn mir_insert_condition(
     else_tree: Option<&TreeBody>,
     ctx: &mut MirExpressionContext,
 ) -> Result<MirExpression, ()> {
+    mir_assert_is_boolean(&cond.ty)?;
+
     let start_block = ctx.blocks.current_block().unwrap();
 
     let then_block = ctx.blocks.add_block();
@@ -517,9 +496,7 @@ fn mir_insert_condition(
     };
     let else_block_end = ctx.blocks.current_block().unwrap();
 
-    if then_value.ty != else_value.ty {
-        panic!("If statement branches must return the same type");
-    }
+    mir_assert_types_equal(&then_value.ty, &else_value.ty)?;
 
     let value = if !mir_is_empty_type(&then_value.ty) {
         let ty = then_value.ty.clone();
@@ -579,19 +556,4 @@ fn mir_insert_condition(
     ctx.blocks.select_block(end_block);
 
     Ok(value)
-}
-
-fn mir_is_empty_type(ty: &MirType) -> bool {
-    match &ty.kind {
-        MirTypeKind::Void => true,
-        MirTypeKind::Never => true,
-        _ => false,
-    }
-}
-
-fn mir_make_empty_expr() -> MirExpression {
-    MirExpression {
-        kind: MirExpressionKind::NoValue,
-        ty: mir_get_void_type(),
-    }
 }

@@ -203,19 +203,19 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
     }
 
     fn get_type(&self, ty: &MirType) -> BasicTypeEnum<'ctx> {
-        match &ty.kind {
-            MirTypeKind::Num(ty) => match ty {
+        match &ty {
+            MirType::Num(ty) => match ty {
                 NumberKind::UnsignedInt(bits) => self.get_int_type(bits).into(),
                 NumberKind::SignedInt(bits) => self.get_int_type(bits).into(),
                 NumberKind::Float(bits) => self.get_float_type(bits).into(),
             },
 
-            MirTypeKind::Bool => self.context.bool_type().into(),
-            MirTypeKind::Void => panic!("Unexpected void type"),
-            MirTypeKind::Never => panic!("Unexpected never type"),
-            MirTypeKind::Ptr(ty) => self.get_type(ty).ptr_type(AddressSpace::default()).into(),
-            MirTypeKind::ConstArray(ty, size) => self.get_type(ty).array_type(*size).into(),
-            MirTypeKind::Vector(ty, width) => self.get_vector_type(ty, *width).into(),
+            MirType::Bool => self.context.bool_type().into(),
+            MirType::Void => panic!("Unexpected void type"),
+            MirType::Never => panic!("Unexpected never type"),
+            MirType::Ptr(ty) => self.get_type(ty).ptr_type(AddressSpace::default()).into(),
+            MirType::ConstArray(ty, size) => self.get_type(ty).array_type(*size).into(),
+            MirType::Vector(ty, width) => self.get_vector_type(ty, *width).into(),
         }
     }
 
@@ -228,10 +228,8 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
             .map(|arg| self.get_type(&arg).into())
             .collect::<Vec<_>>();
 
-        match ty.kind {
-            MirTypeKind::Void | MirTypeKind::Never => {
-                self.context.void_type().fn_type(&args, false)
-            }
+        match ty {
+            MirType::Void | MirType::Never => self.context.void_type().fn_type(&args, false),
 
             _ => self.get_type(&ty).fn_type(&args, false),
         }

@@ -1,8 +1,8 @@
-use super::{MirExpression, MirExpressionKind, MirType, MirTypeKind, MirVectorExtend};
+use super::{MirExpression, MirExpressionKind, MirType, MirVectorExtend};
 
 pub fn mir_extend_num_to_vector(num: MirExpression, width: u32) -> Result<MirExpression, ()> {
-    let num_type = match num.ty.kind {
-        MirTypeKind::Num(num_type) => num_type,
+    let num_type = match num.ty {
+        MirType::Num(num_type) => num_type,
         _ => return Err(()),
     };
 
@@ -12,12 +12,25 @@ pub fn mir_extend_num_to_vector(num: MirExpression, width: u32) -> Result<MirExp
         unit_ty: num_type,
     });
 
-    let new_vec_type = MirType {
-        kind: MirTypeKind::Vector(num_type, width),
-    };
+    let new_vec_type = MirType::Vector(num_type, width);
 
     Ok(MirExpression {
         kind,
         ty: new_vec_type,
     })
+}
+
+pub fn mir_is_empty_type(ty: &MirType) -> bool {
+    match &ty {
+        MirType::Void => true,
+        MirType::Never => true,
+        _ => false,
+    }
+}
+
+pub fn mir_make_empty_expr() -> MirExpression {
+    MirExpression {
+        kind: MirExpressionKind::NoValue,
+        ty: MirType::Void,
+    }
 }
