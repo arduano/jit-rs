@@ -1,8 +1,8 @@
 use inkwell::{values::BasicValueEnum, FloatPredicate, IntPredicate};
 
 use crate::mir::{
-    MirBinaryOp, MirExpression, MirIntrinsicBinaryOp, MirIntrinsicUnaryOp,
-    MirIntrinsicVectorBinaryOp, MirType, MirUnaryOp, MirVectorBinaryOp,
+    MirBinaryOp, MirIntrinsicBinaryOp, MirIntrinsicUnaryOp, MirIntrinsicVectorBinaryOp, MirType,
+    MirUnaryOp, MirVectorBinaryOp,
 };
 
 use super::FunctionInsertContext;

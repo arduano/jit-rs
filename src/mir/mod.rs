@@ -5,6 +5,7 @@ mod operators;
 mod statement;
 mod structures;
 mod ty;
+mod misc;
 mod variables;
 
 pub use expression::*;
@@ -25,9 +26,11 @@ use self::{blocks::MirBlockBuilder, operators::mir_parse_unary_expr, variables::
 
 struct MirFunctionContext<'a> {
     functions: &'a [MirFunctionDeclaration],
+    return_ty: MirType,
 }
 
 pub struct MirExpressionContext<'a> {
+    fn_ctx: &'a MirFunctionContext<'a>,
     functions: &'a [MirFunctionDeclaration],
     blocks: MirBlockBuilder,
     variables: VariableStorage,
@@ -42,14 +45,21 @@ pub fn mir_parse_module(module: &TreeModule) -> Result<MirModule, ()> {
 
     // FIXME: Process duplicate functions
 
-    let fn_context = MirFunctionContext {
-        functions: &function_decls,
-    };
-
     let functions = module
         .functions
         .iter()
-        .map(|function| mir_parse_function(function, &fn_context))
+        .map(|function| {
+            mir_parse_function(
+                function,
+                &MirFunctionContext {
+                    functions: &function_decls,
+                    return_ty: match function.ret_type {
+                        Some(ref ty) => mir_parse_type(ty)?,
+                        None => mir_get_void_type(),
+                    },
+                },
+            )
+        })
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(MirModule { functions })
@@ -86,6 +96,7 @@ fn mir_parse_function(
         .unwrap();
 
     let mut ctx = MirExpressionContext {
+        fn_ctx: ctx,
         functions: ctx.functions,
         blocks: MirBlockBuilder::new(),
         variables: VariableStorage::new(),
@@ -112,6 +123,13 @@ fn mir_parse_function(
 
     let final_expr = mir_parse_body(&function.body, &mut ctx)?;
     ctx.variables.pop_scope();
+
+    if final_expr.ty != ctx.fn_ctx.return_ty {
+        panic!(
+            "Type mismatch in return statement: expected {:?}, got {:?}",
+            ctx.fn_ctx.return_ty, final_expr.ty
+        );
+    }
 
     let return_val = if !mir_is_empty_type(&final_expr.ty) {
         Some(final_expr)
@@ -200,6 +218,13 @@ fn mir_get_void_type() -> MirType {
 }
 
 fn mir_parse_body(body: &TreeBody, ctx: &mut MirExpressionContext) -> Result<MirExpression, ()> {
+    if body.body.is_empty() {
+        return Ok(MirExpression {
+            kind: MirExpressionKind::NoValue,
+            ty: mir_get_void_type(),
+        });
+    }
+
     for (i, expr) in body.body.iter().enumerate() {
         let is_last = i == body.body.len() - 1;
         let expr = mir_parse_expression(expr, ctx, ExprLocation::Root)?;
@@ -323,6 +348,13 @@ fn mir_parse_expression(
         },
         TreeExpressionKind::ReturnStatement(ret) => {
             let value = mir_parse_expression(&ret.value, ctx, ExprLocation::Other)?;
+            if value.ty != ctx.fn_ctx.return_ty {
+                panic!(
+                    "Type mismatch in return statement: expected {:?}, got {:?}",
+                    ctx.fn_ctx.return_ty, value.ty
+                );
+            }
+
             ctx.blocks.add_statement(MirStatement {
                 kind: MirStatementKind::Return(Some(value)),
             });
@@ -408,6 +440,25 @@ fn mir_parse_expression(
                             value: ptr,
                             index,
                             index_ty,
+                        })),
+                    }
+                }
+                MirTypeKind::Vector(ty, _) => {
+                    // From: parent ptr -> [array -> value]
+                    // To: indexed ptr -> value
+
+                    let ty = MirType {
+                        kind: MirTypeKind::Num(*ty),
+                    };
+
+                    let new_ty = ty.as_ptr();
+
+                    MirExpression {
+                        ty: new_ty,
+                        kind: MirExpressionKind::IndexPtr(Box::new(MirIndexPtr {
+                            value: ptr,
+                            index,
+                            index_ty: ty,
                         })),
                     }
                 }

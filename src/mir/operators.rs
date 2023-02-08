@@ -1,6 +1,6 @@
 use crate::{
     common::{IntBits, NumberKind},
-    mir::MirVectorBinaryOp,
+    mir::{misc::mir_extend_num_to_vector, MirVectorBinaryOp},
     tree_parser::{
         TreeBinaryOpKind, TreeBinaryOpList, TreeExpression, TreeUnaryOp, TreeUnaryOpKind,
     },
@@ -337,57 +337,88 @@ fn seal_mir_arithmetic_expr(
 ) -> Result<MirExpression, ()> {
     let (left, tree_op, right) = data;
 
-    if &left.ty != &right.ty {
-        panic!(
-            "Operator {:?} not allowed between {:?} and {:?}",
-            tree_op, left.ty, right.ty
-        )
-    }
+    match (&left.ty.kind, &right.ty.kind) {
+        // Unit operations
+        (&MirTypeKind::Num(lty), &MirTypeKind::Num(rty)) => {
+            if lty != rty {
+                panic!(
+                    "Operator {:?} not allowed between {:?} and {:?}",
+                    tree_op, left.ty, right.ty
+                )
+            }
 
-    let basic_op = match &left.ty.kind {
-        MirTypeKind::Num(ty) => match ty {
-            NumberKind::Float(_) => ops.float,
-            NumberKind::SignedInt(_) => ops.sint,
-            NumberKind::UnsignedInt(_) => ops.uint,
-        },
-        _ => None,
-    };
+            let basic_op = match lty {
+                NumberKind::Float(_) => ops.float,
+                NumberKind::SignedInt(_) => ops.sint,
+                NumberKind::UnsignedInt(_) => ops.uint,
+            };
 
-    if let Some(op) = basic_op {
-        return Ok(MirExpression {
-            ty: left.ty.clone(),
-            kind: MirExpressionKind::BinaryOp(Box::new(MirBinaryOp {
-                op,
-                lhs: left,
-                rhs: right,
-            })),
-        });
-    }
-
-    let vector_op = match &left.ty.kind {
-        MirTypeKind::Vector(ty, width) => match ty {
-            NumberKind::SignedInt(IntBits::BitsSize)
-            | NumberKind::UnsignedInt(IntBits::BitsSize) => None,
-
-            NumberKind::Float(_) => ops.vec_float,
-            NumberKind::SignedInt(_) => ops.vec_sint,
-            NumberKind::UnsignedInt(_) => ops.vec_uint,
+            if let Some(op) = basic_op {
+                return Ok(MirExpression {
+                    ty: left.ty.clone(),
+                    kind: MirExpressionKind::BinaryOp(Box::new(MirBinaryOp {
+                        op,
+                        lhs: left,
+                        rhs: right,
+                    })),
+                });
+            }
         }
-        .map(|op| (op, *ty, *width)),
-        _ => None,
-    };
+        (&MirTypeKind::Vector(lty, lwidth), &MirTypeKind::Vector(rty, rwidth)) => {
+            if lty != rty || lwidth != rwidth {
+                panic!(
+                    "Operator {:?} not allowed between {:?} and {:?}",
+                    tree_op, left.ty, right.ty
+                )
+            }
 
-    if let Some((op, ty, width)) = vector_op {
-        return Ok(MirExpression {
-            ty: left.ty.clone(),
-            kind: MirExpressionKind::VectorBinaryOp(Box::new(MirVectorBinaryOp {
-                op,
-                lhs: left,
-                rhs: right,
-                scalar_ty: ty,
-                width,
-            })),
-        });
+            let vector_op = match lty {
+                NumberKind::SignedInt(IntBits::BitsSize)
+                | NumberKind::UnsignedInt(IntBits::BitsSize) => None,
+
+                NumberKind::Float(_) => ops.vec_float,
+                NumberKind::SignedInt(_) => ops.vec_sint,
+                NumberKind::UnsignedInt(_) => ops.vec_uint,
+            };
+
+            if let Some(op) = vector_op {
+                return Ok(MirExpression {
+                    ty: left.ty.clone(),
+                    kind: MirExpressionKind::VectorBinaryOp(Box::new(MirVectorBinaryOp {
+                        op,
+                        lhs: left,
+                        rhs: right,
+                        scalar_ty: lty,
+                        width: lwidth,
+                    })),
+                });
+            }
+        }
+
+        (&MirTypeKind::Num(lty), &MirTypeKind::Vector(rty, rwidth)) => {
+            if lty != rty {
+                panic!(
+                    "Operator {:?} not allowed between {:?} and {:?}",
+                    tree_op, left.ty, right.ty
+                )
+            }
+
+            let left = mir_extend_num_to_vector(left, rwidth)?;
+            return seal_mir_arithmetic_expr((left, tree_op, right), ops);
+        }
+        (&MirTypeKind::Vector(lty, lwidth), &MirTypeKind::Num(rty)) => {
+            if lty != rty {
+                panic!(
+                    "Operator {:?} not allowed between {:?} and {:?}",
+                    tree_op, left.ty, right.ty
+                )
+            }
+
+            let right = mir_extend_num_to_vector(right, lwidth)?;
+            return seal_mir_arithmetic_expr((left, tree_op, right), ops);
+        }
+
+        _ => {}
     }
 
     panic!("Operator {:?} not allowed for {:?}", tree_op, left.ty);

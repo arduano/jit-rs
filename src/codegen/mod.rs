@@ -1,4 +1,4 @@
-use std::{collections::HashSet, path::PathBuf, sync::Arc};
+use std::{collections::HashSet, path::PathBuf};
 
 use inkwell::{
     basic_block::BasicBlock,
@@ -108,6 +108,7 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
         pass_manager.add_licm_pass();
         pass_manager.add_gvn_pass();
         pass_manager.add_cfg_simplification_pass();
+        pass_manager.add_ind_var_simplify_pass();
         pass_manager.add_correlated_value_propagation_pass();
 
         pass_manager.run_on(&self.module);
@@ -287,6 +288,8 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
             blocks.push(module.context.append_basic_block(fn_value, "block"));
         }
 
+        module.builder.position_at_end(blocks[0]);
+
         let mut variables = Vec::new();
         for var in &function.variables {
             let ty = module.get_type(&var.ty);
@@ -418,6 +421,15 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
                 let value = self.module.builder.build_load(pointee_ty, ptr, "deref");
 
                 Some(value.into())
+            }
+            MirExpressionKind::VectorExtend(extend) => {
+                let value = self.write_expression(&extend.unit).unwrap();
+
+                let mut values = Vec::with_capacity(extend.width as usize);
+                values.resize_with(extend.width as usize, || value.clone());
+                let vector = VectorType::const_vector(&values);
+
+                Some(vector.into())
             }
         }
     }

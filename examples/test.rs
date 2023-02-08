@@ -1,3 +1,5 @@
+use std::arch::x86_64::__m256i;
+
 use jit_rs::codegen::LlvmCodegen;
 use jit_rs::macro_builder::*;
 use jit_rs::mir::mir_parse_module;
@@ -22,12 +24,13 @@ fn main() {
         //     let arg = (*arg);
         //     return arg[index];
         // }
-        pub fn mod_ptr(arg: *u32) {
-            *arg = 10u32;
-        }
-        // pub fn vec_add(arg: *<u32; 8usize>) {
-        //     *arg = (*arg) + (*arg);
+        // pub fn mod_ptr(arg: *u32) {
+        //     *arg = 10u32;
         // }
+
+        pub fn vec_op(arg: <u32; 8usize>) -> <u32; 8usize> {
+            1u32 - arg
+        }
     };
 
     println!("{}", &tokens);
@@ -64,16 +67,27 @@ fn main() {
         //     .unwrap();
         // compiled.call(arr.as_ptr(), 0)
 
-        let mut num = 0u32;
-        let num = &mut num as *mut u32;
+        // let mut num = 0u32;
+        // let num = &mut num as *mut u32;
+        // let compiled = engine
+        //     .get_function::<unsafe extern "C" fn(*mut u32)>("mod_ptr")
+        //     .unwrap();
+        // compiled.call(num);
+        // *num
+
+        let num_arr = [0u32, 1u32, 2u32, 3u32, 4u32, 5u32, 6u32, 7u32];
+        let mut as_mm: __m256i = std::mem::transmute(num_arr);
+        let num_arr = &mut as_mm as *mut __m256i;
+        dbg!(num_arr);
         let compiled = engine
-            .get_function::<unsafe extern "C" fn(*mut u32)>("mod_ptr")
+            .get_function::<unsafe extern "C" fn(__m256i) -> __m256i>("vec_op")
             .unwrap();
-        compiled.call(num);
-        *num
+        as_mm = compiled.call(as_mm);
+        let as_arr: [u32; 8] = std::mem::transmute(as_mm);
+        as_arr
     };
 
-    println!("Result: {}", result);
+    println!("Result: {:?}", result);
 
     // println!(
     //     "Native: {}",
