@@ -22,9 +22,11 @@ pub enum TreeExpressionKind {
     BinaryOpList(TreeBinaryOpList),
     IndexOp(TreeIndexOp),
     UnaryOp(TreeUnaryOp),
+    StructInit(TreeStructInit),
     Group(TreeBody),
     VarRead(TreeVarRead),
     PtrAssign(TreePtrAssign),
+    IndexField(TreeIndexField),
     Cast(TreeCast),
     Number(TreeNumberLiteral),
     Bool(TreeBoolLiteral),
@@ -50,6 +52,8 @@ impl TreeExpression {
             TreeExpressionKind::LetStatement(expr)
         } else if let Some(expr) = pass_val!(cursor, TreeWhileStatement::parse(cursor.clone())) {
             TreeExpressionKind::WhileStatement(expr)
+        } else if let Some(expr) = pass_val!(cursor, TreeStructInit::parse(cursor.clone())) {
+            TreeExpressionKind::StructInit(expr)
         } else if let Some(expr) = pass_val!(cursor, TreeStaticFnCall::parse(cursor.clone())) {
             TreeExpressionKind::StaticFnCall(expr)
         } else if let Some(expr) = pass_val!(cursor, TreeVarRead::parse(cursor.clone())) {
@@ -113,6 +117,15 @@ impl TreeExpression {
                     kind: TreeExpressionKind::IndexOp(get_required_val!(
                         cursor,
                         TreeIndexOp::parse(cursor, expr)
+                    )),
+                };
+                continue;
+            }
+            if TreeIndexField::could_match(&cursor) {
+                expr = TreeExpression {
+                    kind: TreeExpressionKind::IndexField(get_required_val!(
+                        cursor,
+                        TreeIndexField::parse(cursor, expr)
                     )),
                 };
                 continue;
@@ -259,5 +272,104 @@ impl TreeParenthesizedExpr {
         } else {
             ParseResult::no_match(Self::KIND)
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TreeStructInit {
+    pub name: Cow<'static, str>,
+    pub fields: Vec<TreeStructInitField>,
+}
+
+impl TreeStructInit {
+    const KIND: &'static str = "parenthesized expression";
+
+    pub fn parse<'a>(mut cursor: ParseCursor<'a>) -> ParseResult<'a, Self> {
+        if let Some(JitToken {
+            kind: JitTokenKind::Ident(name),
+            span: _,
+        }) = cursor.next()
+        {
+            if name.chars().nth(0).unwrap().is_lowercase() {
+                return ParseResult::no_match(Self::KIND);
+            }
+
+            // let mut types = Vec::new();
+
+            // if cursor.parse_next_basic(JitBasicToken::DoubleColon) {
+            //     if !cursor.parse_next_basic(JitBasicToken::LeftAngBracket) {
+            //         return ParseResult::error("Expected type arguments");
+            //     }
+
+            //     while !cursor.peek_next_basic(JitBasicToken::RightAngBracket) {
+            //         let arg = get_required_val!(cursor, TreeType::parse(cursor.clone()));
+            //         types.push(arg);
+
+            //         let has_comma = cursor.parse_next_basic(JitBasicToken::Comma);
+
+            //         if !has_comma && !cursor.peek_next_basic(JitBasicToken::RightAngBracket) {
+            //             return ParseResult::error("Expected a comma");
+            //         }
+            //     }
+            //     cursor.parse_next_basic(JitBasicToken::RightAngBracket);
+            // }
+
+            let Ok(mut paren_cursor) = cursor.parse_next_group(JitGroupKind::Braces) else {
+                return ParseResult::no_match(Self::KIND);
+            };
+
+            let mut fields = Vec::new();
+
+            while !paren_cursor.is_empty() {
+                let field = get_required_val!(
+                    paren_cursor,
+                    TreeStructInitField::parse(paren_cursor.clone())
+                );
+
+                fields.push(field);
+
+                let has_comma = paren_cursor.parse_next_basic(JitBasicToken::Comma);
+
+                if !has_comma && !paren_cursor.is_empty() {
+                    return ParseResult::error("Expected a comma");
+                }
+            }
+
+            ParseResult::Ok(
+                cursor,
+                Self {
+                    name: name.clone(),
+                    fields,
+                },
+            )
+        } else {
+            ParseResult::no_match(Self::KIND)
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TreeStructInitField {
+    pub name: Cow<'static, str>,
+    pub value: TreeExpression,
+}
+
+impl TreeStructInitField {
+    pub fn parse<'a>(mut cursor: ParseCursor<'a>) -> ParseResult<'a, Self> {
+        let name = ident_or_error!(cursor, "struct field");
+
+        if !cursor.parse_next_basic(JitBasicToken::Colon) {
+            return ParseResult::no_match("struct field");
+        }
+
+        let expr = get_required_val!(cursor, TreeExpression::parse(cursor, ExprLocation::Other));
+
+        ParseResult::Ok(
+            cursor,
+            Self {
+                name: name.clone(),
+                value: expr,
+            },
+        )
     }
 }

@@ -64,6 +64,7 @@ impl Parse for Mapper {
             } else {
                 try_basic!(pub, Pub);
                 try_basic!(fn, Fn);
+                try_basic!(struct, Struct);
                 try_basic!(as, As);
                 try_basic!(if, If);
                 try_basic!(else, Else);

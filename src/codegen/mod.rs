@@ -1,4 +1,8 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
 use inkwell::{
     basic_block::BasicBlock,
@@ -8,8 +12,12 @@ use inkwell::{
     module::{Linkage, Module},
     passes::PassManager,
     targets::{CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetTriple},
-    types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FloatType, IntType, VectorType},
-    values::{BasicValueEnum, FunctionValue, PointerValue, VectorValue},
+    types::{
+        BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FloatType, IntType, StructType, VectorType,
+    },
+    values::{
+        AggregateValue, BasicValue, BasicValueEnum, FunctionValue, PointerValue, VectorValue,
+    },
     AddressSpace, OptimizationLevel,
 };
 
@@ -58,6 +66,7 @@ pub struct LlvmCodegenModule<'ctx> {
     context: &'ctx Context,
     module: Module<'ctx>,
     builder: Builder<'ctx>,
+    structs: HashMap<Cow<'static, str>, StructType<'ctx>>,
     llvm_intrinsics_added: HashSet<String>,
 }
 
@@ -167,8 +176,14 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
             module,
             builder,
             size_bits,
+            structs: HashMap::new(),
             llvm_intrinsics_added: HashSet::new(),
         };
+
+        let mut functions = Vec::new();
+        for struc in mir.structs.iter() {
+            functions.push(module.declare_struct(&struc));
+        }
 
         let mut functions = Vec::new();
         for func in mir.functions.iter() {
@@ -224,6 +239,7 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
             MirType::Ptr(ty) => self.get_type(ty).ptr_type(AddressSpace::default()).into(),
             MirType::ConstArray(ty, size) => self.get_type(ty).array_type(*size).into(),
             MirType::Vector(ty, width) => self.get_vector_type(ty, *width).into(),
+            MirType::Struct(name) => self.structs.get(name).unwrap().as_basic_type_enum(),
         }
     }
 
@@ -259,6 +275,18 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
             .add_function(&function.name, function_type, linking);
 
         function
+    }
+
+    fn declare_struct(&mut self, struc: &MirStruct) {
+        let fields = struc
+            .fields
+            .iter()
+            .map(|field| self.get_type(&field))
+            .collect::<Vec<_>>();
+
+        let ty = self.context.struct_type(&fields, false);
+
+        self.structs.insert(struc.name.clone(), ty);
     }
 
     fn implement_function(&mut self, function: &MirFunction, fn_value: FunctionValue<'ctx>) {
@@ -477,6 +505,54 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
                 } else {
                     Some(ret.try_as_basic_value().left().unwrap())
                 }
+            }
+            MirExpressionKind::IndexStruct(index) => {
+                let value = self.write_expression(&index.value).unwrap();
+                let value = value.into_pointer_value();
+
+                let struct_ty = self
+                    .module
+                    .structs
+                    .get(&index.struct_name)
+                    .unwrap()
+                    .as_basic_type_enum();
+
+                let ptr = self
+                    .module
+                    .builder
+                    .build_struct_gep(struct_ty, value, index.index, "index")
+                    .unwrap();
+
+                Some(ptr.into())
+            }
+            MirExpressionKind::StructInit(init) => {
+                let values: Vec<_> = init
+                    .fields
+                    .iter()
+                    .map(|field| {
+                        let value = self.write_expression(field).unwrap();
+
+                        value.as_basic_value_enum()
+                    })
+                    .collect();
+
+                let struct_ty = self.module.structs.get(&init.name).unwrap();
+
+                let defaults: Vec<_> = values.iter().map(|v| v.get_type().const_zero()).collect();
+                let struc = struct_ty.const_named_struct(&defaults);
+
+                let mut agg = struc.as_aggregate_value_enum();
+
+                // Insert the values one at a time
+                for (i, value) in values.into_iter().enumerate() {
+                    agg = self
+                        .module
+                        .builder
+                        .build_insert_value(agg, value, i as u32, "insert")
+                        .unwrap();
+                }
+
+                Some(agg.as_basic_value_enum())
             }
         }
     }

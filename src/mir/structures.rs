@@ -1,10 +1,11 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::HashMap};
 
 use super::{MirStatement, MirType};
 
 #[derive(Debug, Clone)]
 pub struct MirModule {
     pub functions: Vec<MirFunction>,
+    pub structs: Vec<MirStruct>,
 }
 
 #[derive(Debug, Clone)]
@@ -20,6 +21,19 @@ pub struct MirFunctionBody {
     pub decl: MirFunctionDeclaration,
     pub variables: Vec<MirVariableDeclare>,
     pub blocks: Vec<MirBlock>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MirStructDeclaration {
+    pub name: Cow<'static, str>,
+    pub field_indexes: HashMap<Cow<'static, str>, usize>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MirStruct {
+    pub decl: MirStructDeclaration,
+    pub name: Cow<'static, str>,
+    pub fields: Vec<MirType>,
 }
 
 #[derive(Debug, Clone)]

@@ -43,10 +43,6 @@ fn main() {
             store_vec::<<i32; 8usize>>(arr, val);
         }
 
-        fn test(arr: *i32, len: usize) {
-
-        }
-
         pub fn square_vec(arr: *i32, len: usize) {
             let i = 0usize;
 
@@ -62,6 +58,20 @@ fn main() {
                 arr[i] = val * val;
                 i = i + 1usize;
             }
+        }
+
+        struct TestStruc {
+            a: i32,
+            b: i32,
+        }
+
+        pub fn structs(val: i32) -> i32 {
+            let struc = TestStruc {
+                a: val,
+                b: 5i32
+            };
+            struc.b = 10i32;
+            struc.a + struc.b
         }
     };
 
@@ -131,16 +141,21 @@ fn main() {
         // compiled.call(ptr);
         // num_arr
 
-        let mut num_arr = [
-            0i32, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
-            13, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 2, 2, 2,
-        ];
-        let ptr = &mut num_arr as *mut i32;
+        // let mut num_arr = [
+        //     0i32, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+        //     13, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 2, 2, 2,
+        // ];
+        // let ptr = &mut num_arr as *mut i32;
+        // let compiled = engine
+        //     .get_function::<unsafe extern "C" fn(*mut i32, usize)>("square_vec")
+        //     .unwrap();
+        // compiled.call(ptr, num_arr.len());
+        // num_arr
+
         let compiled = engine
-            .get_function::<unsafe extern "C" fn(*mut i32, usize)>("square_vec")
+            .get_function::<unsafe extern "C" fn(i32) -> i32>("structs")
             .unwrap();
-        compiled.call(ptr, num_arr.len());
-        num_arr
+        compiled.call(514)
     };
 
     println!("Result: {:?}", result);

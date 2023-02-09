@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::common::NumberKind;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -9,6 +11,7 @@ pub enum MirType {
     Ptr(Box<MirType>),
     ConstArray(Box<MirType>, u32),
     Vector(NumberKind, u32),
+    Struct(Cow<'static, str>),
 }
 
 impl MirType {

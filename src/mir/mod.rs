@@ -12,6 +12,8 @@ mod structures;
 mod ty;
 mod variables;
 
+use std::collections::HashMap;
+
 pub use expression::*;
 pub use intrinsics::*;
 pub use statement::*;
@@ -22,7 +24,8 @@ use crate::{
     common::{FloatBits, IntBits, NumberKind},
     mir::operators::mir_parse_binary_expr_list,
     tree_parser::{
-        TreeBody, TreeExpression, TreeExpressionKind, TreeFunction, TreeModule, TreeType,
+        TreeBody, TreeExpression, TreeExpressionKind, TreeFunction, TreeModule, TreeStruct,
+        TreeType,
     },
 };
 
@@ -37,26 +40,50 @@ use self::{
     variables::VariableStorage,
 };
 
+struct MirTypeContext<'a> {
+    structs: &'a [MirStructDeclaration],
+}
+
 struct MirFunctionContext<'a> {
     functions: &'a [MirFunctionDeclaration],
+    structs: &'a [MirStruct],
+    ty: &'a MirTypeContext<'a>,
     return_ty: MirType,
 }
 
 pub struct MirExpressionContext<'a> {
     fn_ctx: &'a MirFunctionContext<'a>,
     functions: &'a [MirFunctionDeclaration],
+    structs: &'a [MirStruct],
+    ty: &'a MirTypeContext<'a>,
     blocks: MirBlockBuilder,
     variables: VariableStorage,
 }
 
 pub fn mir_parse_module(module: &TreeModule) -> Result<MirModule, ()> {
+    // FIXME: Process duplicate functions and structs
+
+    let struct_decls = module
+        .structs
+        .iter()
+        .map(mir_parse_struct_decl)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let ty_ctx = MirTypeContext {
+        structs: &struct_decls,
+    };
+
     let function_decls = module
         .functions
         .iter()
-        .map(mir_parse_function_decl)
+        .map(|f| mir_parse_function_decl(f, &ty_ctx))
         .collect::<Result<Vec<_>, _>>()?;
 
-    // FIXME: Process duplicate functions
+    let structs = module
+        .structs
+        .iter()
+        .map(|struc| mir_parse_struct(struc, &ty_ctx))
+        .collect::<Result<Vec<_>, _>>()?;
 
     let functions = module
         .functions
@@ -66,8 +93,10 @@ pub fn mir_parse_module(module: &TreeModule) -> Result<MirModule, ()> {
                 function,
                 &MirFunctionContext {
                     functions: &function_decls,
+                    structs: &structs,
+                    ty: &ty_ctx,
                     return_ty: match function.ret_type {
-                        Some(ref ty) => mir_parse_type(ty)?,
+                        Some(ref ty) => mir_parse_type(ty, &ty_ctx)?,
                         None => MirType::Void,
                     },
                 },
@@ -75,14 +104,51 @@ pub fn mir_parse_module(module: &TreeModule) -> Result<MirModule, ()> {
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    Ok(MirModule { functions })
+    Ok(MirModule { functions, structs })
 }
 
-pub fn mir_parse_function_decl(function: &TreeFunction) -> Result<MirFunctionDeclaration, ()> {
+pub fn mir_parse_struct_decl(struc: &TreeStruct) -> Result<MirStructDeclaration, ()> {
+    let mut field_indexes = HashMap::new();
+
+    for (i, field) in struc.fields.iter().enumerate() {
+        field_indexes.insert(field.name.clone(), i);
+    }
+
+    Ok(MirStructDeclaration {
+        name: struc.name.clone(),
+        field_indexes,
+    })
+}
+
+fn mir_parse_struct(struc: &TreeStruct, ctx: &MirTypeContext) -> Result<MirStruct, ()> {
+    let decl = ctx
+        .structs
+        .iter()
+        .find(|decl| decl.name == struc.name)
+        .unwrap()
+        .clone();
+
+    let mut fields = Vec::<MirType>::new();
+
+    for (i, field) in struc.fields.iter().enumerate() {
+        fields.push(mir_parse_type(&field.ty, ctx)?);
+    }
+
+    Ok(MirStruct {
+        name: struc.name.clone(),
+        fields,
+        decl,
+    })
+}
+
+fn mir_parse_function_decl(
+    function: &TreeFunction,
+    ty_ctx: &MirTypeContext,
+) -> Result<MirFunctionDeclaration, ()> {
     Ok(MirFunctionDeclaration {
         public: function.public,
         ret_type: match function.ret_type {
-            Some(ref ty) => mir_parse_type(ty)?,
+            Some(ref ty) => mir_parse_type(ty, ty_ctx)?,
             None => MirType::Void,
         },
         name: function.name.clone(),
@@ -92,7 +158,7 @@ pub fn mir_parse_function_decl(function: &TreeFunction) -> Result<MirFunctionDec
             .map(|arg| {
                 Ok(MirFunctionArg {
                     name: arg.name.clone(),
-                    ty: mir_parse_type(&arg.ty)?,
+                    ty: mir_parse_type(&arg.ty, ty_ctx)?,
                 })
             })
             .collect::<Result<Vec<_>, _>>()?,
@@ -112,6 +178,8 @@ fn mir_parse_function(
     let mut ctx = MirExpressionContext {
         fn_ctx: ctx,
         functions: ctx.functions,
+        structs: ctx.structs,
+        ty: ctx.ty,
         blocks: MirBlockBuilder::new(),
         variables: VariableStorage::new(),
     };
@@ -123,7 +191,7 @@ fn mir_parse_function(
 
     // Insert the args as variables
     for (i, arg) in function.args.iter().enumerate() {
-        let ty = mir_parse_type(&arg.ty)?;
+        let ty = mir_parse_type(&arg.ty, ctx.ty)?;
         let var_decl = ctx.variables.declare(arg.name.clone(), ty.clone());
 
         let read = MirExpression {
@@ -158,7 +226,7 @@ fn mir_parse_function(
     })
 }
 
-fn mir_parse_type(ty: &TreeType) -> Result<MirType, ()> {
+fn mir_parse_type(ty: &TreeType, ctx: &MirTypeContext) -> Result<MirType, ()> {
     fn number(ty: NumberKind) -> MirType {
         MirType::Num(ty)
     }
@@ -191,18 +259,28 @@ fn mir_parse_type(ty: &TreeType) -> Result<MirType, ()> {
             "f64" => float(FloatBits::Bits64),
             "bool" => MirType::Bool,
             _ => {
-                panic!("Unsupported type: {}", ty.name);
+                let found_struct = ctx
+                    .structs
+                    .iter()
+                    .find(|struc| struc.name == ty.name)
+                    .cloned();
+
+                if let Some(struc) = found_struct {
+                    MirType::Struct(struc.name)
+                } else {
+                    panic!("Unsupported type: {}", ty.name);
+                }
             }
         },
 
-        TreeType::Ptr(ty) => MirType::Ptr(Box::new(mir_parse_type(&ty)?)),
+        TreeType::Ptr(ty) => MirType::Ptr(Box::new(mir_parse_type(&ty, ctx)?)),
         TreeType::ConstArray(ty, size) => {
-            let ty = mir_parse_type(&ty)?;
+            let ty = mir_parse_type(&ty, ctx)?;
 
             MirType::ConstArray(Box::new(ty), *size)
         }
         TreeType::Vector(ty, width) => {
-            let ty = mir_parse_type(&ty)?;
+            let ty = mir_parse_type(&ty, ctx)?;
 
             let ty = match ty {
                 MirType::Num(ty) => ty,
@@ -457,7 +535,7 @@ fn mir_parse_expression(
         }
         TreeExpressionKind::Cast(cast) => {
             let value = mir_parse_expression(&cast.value, ctx, ExprLocation::Other)?;
-            let new_ty = mir_parse_type(&cast.new_ty)?;
+            let new_ty = mir_parse_type(&cast.new_ty, ctx.ty)?;
 
             match &new_ty {
                 &MirType::Num(ty) => mir_cast_to_number(value, ty)?,
@@ -489,6 +567,101 @@ fn mir_parse_expression(
                 expr
             } else {
                 panic!("Unknown function call");
+            }
+        }
+        TreeExpressionKind::IndexField(index) => {
+            let ptr = mir_parse_expression(&index.ptr, ctx, ExprLocation::NoDeref)?;
+
+            // TODO: Error if this isn't a ptr. We can only index ptr types.
+            let ty_inside_ptr = ptr.ty.deref_ptr().clone();
+
+            let value = match &ty_inside_ptr {
+                MirType::Struct(name) => {
+                    // From: parent ptr -> [value -> field]
+                    // To: indexed ptr -> field
+
+                    let struc = ctx.structs.iter().find(|s| s.name == *name).unwrap();
+
+                    let ind = struc.decl.field_indexes.get(&index.field_name);
+                    let Some(&ind) = ind else {
+                        panic!("No field {} on type {:?}", index.field_name, ty_inside_ptr);
+                    };
+
+                    let field_ty = struc.fields[ind].clone();
+                    let result_ty = field_ty.as_ptr();
+
+                    MirExpression {
+                        ty: result_ty,
+                        kind: MirExpressionKind::IndexStruct(Box::new(MirIndexStruct {
+                            value: ptr,
+                            struct_name: name.clone(),
+                            index: ind as u32,
+                            index_ty: field_ty,
+                        })),
+                    }
+                }
+                _ => panic!("No field {} on type {:?}", index.field_name, ty_inside_ptr),
+            };
+
+            if pos == ExprLocation::NoDeref {
+                value
+            } else {
+                mir_deref_expr(value, ctx)
+            }
+        }
+        TreeExpressionKind::StructInit(init) => {
+            let struc = ctx.structs.iter().find(|s| s.name == init.name);
+
+            let Some(struc) = struc else {
+                panic!("No struct named {}", init.name);
+            };
+
+            // Ensure that the fields match
+            for field in &init.fields {
+                if !struc.decl.field_indexes.contains_key(&field.name) {
+                    panic!("No field named {} on struct {}", field.name, init.name);
+                }
+            }
+
+            for field in struc.decl.field_indexes.keys() {
+                if !init.fields.iter().any(|f| &f.name == field) {
+                    panic!("Missing field {} on struct {}", field, init.name);
+                }
+            }
+
+            let mut fields = Vec::new();
+            for i in 0..struc.fields.len() {
+                // Find the field name at that index
+                let field = struc
+                    .decl
+                    .field_indexes
+                    .iter()
+                    .find(|f| f.1 == &i)
+                    .unwrap()
+                    .0;
+
+                // Get the value for the field
+                let expr = init
+                    .fields
+                    .iter()
+                    .find(|f| &f.name == field)
+                    .unwrap()
+                    .value
+                    .clone();
+
+                let value = mir_parse_expression(&expr, ctx, ExprLocation::Other)?;
+
+                fields.push(value);
+            }
+
+            let ty = MirType::Struct(init.name.clone());
+
+            MirExpression {
+                ty: ty.clone(),
+                kind: MirExpressionKind::StructInit(MirStructInit {
+                    name: init.name.clone(),
+                    fields,
+                }),
             }
         }
     };

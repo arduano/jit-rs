@@ -34,6 +34,7 @@ impl MirExpression {
 pub enum MirExpressionKind {
     ReadArg(MirReadArg),
     IndexPtr(Box<MirIndexPtr>),
+    IndexStruct(Box<MirIndexStruct>),
     GetVariablePtr(MirGetVariablePtr),
     PtrDeref(Box<MirPtrDeref>),
     CastNumber(MirCastNumber),
@@ -45,6 +46,7 @@ pub enum MirExpressionKind {
     VectorExtend(MirVectorExtend),
     PtrCast(Box<MirExpression>),
     IntrinsicOp(Box<MirIntrinsicOp>),
+    StructInit(MirStructInit),
     FunctionCall(MirFunctionCall),
     NoValue,
 }
@@ -111,6 +113,14 @@ pub struct MirIndexPtr {
 }
 
 #[derive(Debug, Clone)]
+pub struct MirIndexStruct {
+    pub value: MirExpression,
+    pub index: u32,
+    pub struct_name: Cow<'static, str>,
+    pub index_ty: MirType,
+}
+
+#[derive(Debug, Clone)]
 pub struct MirReadArg {
     pub index: u32,
 }
@@ -120,4 +130,10 @@ pub struct MirFunctionCall {
     pub is_void: bool,
     pub name: Cow<'static, str>,
     pub args: Vec<MirExpression>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MirStructInit {
+    pub name: Cow<'static, str>,
+    pub fields: Vec<MirExpression>,
 }

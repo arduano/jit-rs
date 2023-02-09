@@ -4,7 +4,7 @@ use crate::tree_parser::{TreeExpression, TreeStaticFnCall, TreeType};
 
 use super::{
     mir_parse_expression, mir_parse_type, ExprLocation, MirExpression, MirExpressionContext,
-    MirExpressionKind, MirIntrinsicOp, MirType,
+    MirExpressionKind, MirIntrinsicOp, MirType, MirTypeContext,
 };
 
 pub fn mir_try_parse_intrinsic_fn(
@@ -13,7 +13,7 @@ pub fn mir_try_parse_intrinsic_fn(
 ) -> Result<Option<MirExpression>, ()> {
     Ok(Some(match f.name.deref() {
         "load_vec" => {
-            let ty = parse_1_type_arg(&f.types)?;
+            let ty = parse_1_type_arg(&f.types, ctx.ty)?;
             let (ty, width) = match ty {
                 MirType::Vector(ty, width) => (ty, width),
                 _ => panic!("Expected a vector type"),
@@ -31,7 +31,7 @@ pub fn mir_try_parse_intrinsic_fn(
             }
         }
         "store_vec" => {
-            let ty = parse_1_type_arg(&f.types)?;
+            let ty = parse_1_type_arg(&f.types, ctx.ty)?;
             let (ty, width) = match ty {
                 MirType::Vector(ty, width) => (ty, width),
                 _ => panic!("Expected a vector type"),
@@ -60,13 +60,13 @@ pub fn mir_try_parse_intrinsic_fn(
     }))
 }
 
-fn parse_1_type_arg(args: &[TreeType]) -> Result<MirType, ()> {
+fn parse_1_type_arg(args: &[TreeType], ctx: &MirTypeContext) -> Result<MirType, ()> {
     if args.len() != 1 {
         panic!("Expected 1 type argument");
     }
 
     let ty = &args[0];
-    return mir_parse_type(ty);
+    return mir_parse_type(ty, ctx);
 }
 
 fn parse_1_value_arg(

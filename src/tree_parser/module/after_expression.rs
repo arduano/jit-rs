@@ -1,5 +1,7 @@
+use std::borrow::Cow;
+
 use crate::{
-    macro_builder::{JitBasicToken, JitGroupKind},
+    macro_builder::{JitBasicToken, JitGroupKind, JitToken, JitTokenKind},
     tree_parser::{
         macros::{get_required_val, pass_val},
         parser::{ParseCursor, ParseResult},
@@ -123,7 +125,7 @@ pub struct TreeIndexOp {
 }
 
 impl TreeIndexOp {
-    const KIND: &'static str = "binary operation list";
+    const KIND: &'static str = "index operation";
 
     pub fn could_match(cursor: &ParseCursor) -> bool {
         cursor
@@ -153,5 +155,49 @@ impl TreeIndexOp {
         } else {
             ParseResult::no_match(Self::KIND)
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TreeIndexField {
+    pub ptr: Box<TreeExpression>,
+    pub field_name: Cow<'static, str>,
+}
+
+impl TreeIndexField {
+    const KIND: &'static str = "get field";
+
+    pub fn could_match(cursor: &ParseCursor) -> bool {
+        let mut cursor = cursor.clone();
+        cursor.parse_next_basic(JitBasicToken::Dot)
+            && matches!(
+                cursor.next(),
+                Some(JitToken {
+                    kind: JitTokenKind::Ident(_),
+                    ..
+                })
+            )
+    }
+
+    pub fn parse<'a>(mut cursor: ParseCursor<'a>, value: TreeExpression) -> ParseResult<'a, Self> {
+        if !cursor.parse_next_basic(JitBasicToken::Dot) {
+            return ParseResult::no_match(Self::KIND);
+        }
+
+        let field_name = match cursor.next() {
+            Some(JitToken {
+                kind: JitTokenKind::Ident(name),
+                ..
+            }) => name,
+            _ => return ParseResult::error("expected field name"),
+        };
+
+        ParseResult::Ok(
+            cursor,
+            Self {
+                ptr: Box::new(value),
+                field_name: field_name.clone(),
+            },
+        )
     }
 }
