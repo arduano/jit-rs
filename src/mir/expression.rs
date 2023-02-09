@@ -1,7 +1,7 @@
 use crate::common::NumberKind;
 
 use super::{
-    variables::MirVariableDecl, MirIntrinsicBinaryOp, MirIntrinsicUnaryOp,
+    variables::MirVariableDecl, MirIntrinsicBinaryOp, MirIntrinsicOp, MirIntrinsicUnaryOp,
     MirIntrinsicVectorBinaryOp, MirLiteral, MirType, MirVariable,
 };
 
@@ -42,6 +42,7 @@ pub enum MirExpressionKind {
     UnaryOp(Box<MirUnaryOp>),
     VectorExtend(MirVectorExtend),
     PtrCast(Box<MirExpression>),
+    IntrinsicOp(Box<MirIntrinsicOp>),
     NoValue,
 }
 

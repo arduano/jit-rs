@@ -1,3 +1,7 @@
+use crate::common::NumberKind;
+
+use super::MirExpression;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MirIntrinsicBinaryOp {
     IntAdd,
@@ -68,4 +72,19 @@ pub enum MirIntrinsicUnaryOp {
     IntNeg,
     FloatNeg,
     BoolNot,
+}
+
+#[derive(Debug, Clone)]
+pub enum MirIntrinsicOp {
+    LoadVector {
+        ptr: MirExpression,
+        scalar_ty: NumberKind,
+        width: u32,
+    },
+    StoreVector {
+        ptr: MirExpression,
+        value: MirExpression,
+        scalar_ty: NumberKind,
+        width: u32,
+    },
 }

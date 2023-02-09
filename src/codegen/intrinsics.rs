@@ -1,8 +1,15 @@
-use inkwell::{values::BasicValueEnum, FloatPredicate, IntPredicate};
+use inkwell::{
+    attributes::{Attribute, AttributeLoc},
+    values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum},
+    AddressSpace, FloatPredicate, IntPredicate,
+};
 
-use crate::mir::{
-    MirBinaryOp, MirIntrinsicBinaryOp, MirIntrinsicUnaryOp, MirIntrinsicVectorBinaryOp, MirUnaryOp,
-    MirVectorBinaryOp,
+use crate::{
+    codegen::misc::codegen_get_true_vector,
+    mir::{
+        MirBinaryOp, MirIntrinsicBinaryOp, MirIntrinsicOp, MirIntrinsicUnaryOp,
+        MirIntrinsicVectorBinaryOp, MirUnaryOp, MirVectorBinaryOp,
+    },
 };
 
 use super::FunctionInsertContext;
@@ -368,6 +375,48 @@ pub fn codegen_unary_expr<'ctx>(
         ),
         MirIntrinsicUnaryOp::BoolNot => {
             Some(builder.build_not(operand.into_int_value(), "not").into())
+        }
+    }
+}
+
+pub fn codegen_intrinsic_op<'ctx>(
+    op: &MirIntrinsicOp,
+    ctx: &mut FunctionInsertContext<'ctx, '_>,
+) -> Option<BasicValueEnum<'ctx>> {
+    match op {
+        MirIntrinsicOp::LoadVector {
+            ptr,
+            scalar_ty,
+            width,
+        } => {
+            let ptr = ctx.write_expression(ptr).unwrap();
+
+            let vector_ty = ctx.module.get_vector_type(scalar_ty, *width);
+            let result = ctx
+                .module
+                .builder
+                .build_load(vector_ty, ptr.into_pointer_value(), "load");
+
+            result
+                .as_instruction_value()
+                .unwrap()
+                .set_alignment(1)
+                .unwrap();
+
+            Some(result)
+        }
+        MirIntrinsicOp::StoreVector { ptr, value, .. } => {
+            let ptr = ctx.write_expression(ptr).unwrap();
+            let value = ctx.write_expression(value).unwrap();
+
+            let result = ctx
+                .module
+                .builder
+                .build_store(ptr.into_pointer_value(), value);
+
+            result.set_alignment(1).unwrap();
+
+            None
         }
     }
 }

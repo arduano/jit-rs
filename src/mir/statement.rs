@@ -26,6 +26,7 @@ pub enum MirStatementKind {
     Jump(MirJump),
     ConditionalJump(MirConditionalJump),
     Return(Option<MirExpression>),
+    VoidExpr(MirExpression),
 }
 
 #[derive(Debug, Clone)]

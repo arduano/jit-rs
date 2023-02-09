@@ -427,8 +427,15 @@ pub fn mir_parse_unary_expr(
     ctx: &mut MirExpressionContext,
     pos: ExprLocation,
 ) -> Result<MirExpression, ()> {
-    let expr = mir_parse_expression(&unary.expr, ctx, ExprLocation::Other)?;
     let op = &unary.op;
+
+    let expr_pos = if op == &TreeUnaryOpKind::Ref {
+        ExprLocation::NoDeref
+    } else {
+        ExprLocation::Other
+    };
+
+    let expr = mir_parse_expression(&unary.expr, ctx, expr_pos)?;
 
     let (op, ty) = match op {
         TreeUnaryOpKind::Neg => {
@@ -448,6 +455,13 @@ pub fn mir_parse_unary_expr(
                 } else {
                     return Ok(mir_deref_expr(expr, ctx));
                 }
+            } else {
+                return Err(());
+            }
+        }
+        TreeUnaryOpKind::Ref => {
+            if is_ptr_type(&expr.ty) {
+                return Ok(expr);
             } else {
                 return Err(());
             }

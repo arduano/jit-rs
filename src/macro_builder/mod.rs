@@ -49,6 +49,7 @@ pub enum JitBasicToken {
     Impl,
     Dot,
     As,
+    DoubleColon,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -197,6 +198,7 @@ impl std::fmt::Display for JitTokenTreePrinter<'_> {
                     JitBasicToken::LessEqual => write!(f, "<=")?,
                     JitBasicToken::GreaterEqual => write!(f, ">=")?,
                     JitBasicToken::DoubleEqual => write!(f, "==")?,
+                    JitBasicToken::DoubleColon => write!(f, "::")?,
                 },
             }
 

@@ -28,6 +28,7 @@ pub enum TreeExpressionKind {
     Cast(TreeCast),
     Number(TreeNumberLiteral),
     Bool(TreeBoolLiteral),
+    StaticFnCall(TreeStaticFnCall),
     Parenthesized(TreeParenthesizedExpr),
     VoidValue(Box<TreeExpression>),
 }
@@ -49,6 +50,8 @@ impl TreeExpression {
             TreeExpressionKind::LetStatement(expr)
         } else if let Some(expr) = pass_val!(cursor, TreeWhileStatement::parse(cursor.clone())) {
             TreeExpressionKind::WhileStatement(expr)
+        } else if let Some(expr) = pass_val!(cursor, TreeStaticFnCall::parse(cursor.clone())) {
+            TreeExpressionKind::StaticFnCall(expr)
         } else if let Some(expr) = pass_val!(cursor, TreeVarRead::parse(cursor.clone())) {
             TreeExpressionKind::VarRead(expr)
         } else if let Some(expr) = pass_val!(cursor, TreeUnaryOp::parse(cursor.clone())) {

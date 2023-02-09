@@ -20,11 +20,15 @@ use crate::{
 
 use self::{
     cast::codegen_number_cast_expr,
-    intrinsics::{codegen_binary_expr, codegen_unary_expr, codegen_vector_binary_expr},
+    intrinsics::{
+        codegen_binary_expr, codegen_intrinsic_op, codegen_unary_expr, codegen_vector_binary_expr,
+    },
+    misc::codegen_extend_into_vector,
 };
 
 mod cast;
 mod intrinsics;
+mod misc;
 
 pub struct LlvmCodegen {
     context: Context,
@@ -270,6 +274,21 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
         let fn_type = ret.fn_type(args, false);
         self.module.add_function(&name, fn_type, None)
     }
+
+    fn insert_void_intrinsic(
+        &mut self,
+        name: String,
+        args: &[BasicMetadataTypeEnum<'ctx>],
+    ) -> FunctionValue<'ctx> {
+        if self.llvm_intrinsics_added.contains(&name) {
+            return self.module.get_function(&name).unwrap();
+        }
+
+        self.llvm_intrinsics_added.insert(name.clone());
+
+        let fn_type = self.context.void_type().fn_type(args, false);
+        self.module.add_function(&name, fn_type, None)
+    }
 }
 
 pub struct FunctionInsertContext<'ctx, 'a> {
@@ -353,6 +372,9 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
                         else_block,
                     );
                 }
+                MirStatementKind::VoidExpr(expr) => {
+                    self.write_expression(&expr);
+                }
             }
         }
     }
@@ -397,6 +419,7 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
             MirExpressionKind::BinaryOp(op) => codegen_binary_expr(op, self),
             MirExpressionKind::VectorBinaryOp(op) => codegen_vector_binary_expr(op, self),
             MirExpressionKind::UnaryOp(op) => codegen_unary_expr(op, self),
+            MirExpressionKind::IntrinsicOp(op) => codegen_intrinsic_op(op, self),
             MirExpressionKind::IndexPtr(index_ptr) => {
                 let value = self.write_expression(&index_ptr.value).unwrap();
                 let index = self.write_expression(&index_ptr.index).unwrap();
@@ -427,11 +450,7 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
             MirExpressionKind::VectorExtend(extend) => {
                 let value = self.write_expression(&extend.unit).unwrap();
 
-                let mut values = Vec::with_capacity(extend.width as usize);
-                values.resize_with(extend.width as usize, || value.clone());
-                let vector = VectorType::const_vector(&values);
-
-                Some(vector.into())
+                Some(codegen_extend_into_vector(self, value, extend.width as usize).into())
             }
             MirExpressionKind::CastNumber(cast) => Some(codegen_number_cast_expr(cast, self)),
             MirExpressionKind::CastVector(_) => todo!(),
@@ -463,7 +482,7 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
 
         let intrinsic_name = format!("llvm.vp.{}.v{}{}", name, width, ty);
 
-        let params = vec![
+        let params = &[
             vector_ty.into(),
             vector_ty.into(),
             mask_ty.into(),
@@ -472,7 +491,7 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
 
         let func = self
             .module
-            .insert_intrinsic(intrinsic_name, vector_ty.into(), &params);
+            .insert_intrinsic(intrinsic_name, vector_ty.into(), params);
 
         let mask = mask_ty.const_zero();
         let size = i32_ty.const_int(width as u64, false);

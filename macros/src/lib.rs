@@ -68,15 +68,20 @@ impl Parse for Mapper {
                 try_basic!(if, If);
                 try_basic!(else, Else);
                 try_basic!(impl, Impl);
-                try_basic!(:, Colon);
-                try_basic!(;, Semicolon);
-                try_basic!(,, Comma);
-                try_basic!(., Dot);
-                try_basic!(->, Arrow);
                 try_basic!(return, Return);
                 try_basic!(loop, Loop);
                 try_basic!(while, While);
                 try_basic!(let, Let);
+                try_basic!(->, Arrow);
+                try_basic!(<=, LessEqual);
+                try_basic!(>=, GreaterEqual);
+                try_basic!(!=, NotEqual);
+                try_basic!(==, DoubleEqual);
+                try_basic!(::, DoubleColon);
+                try_basic!(:, Colon);
+                try_basic!(;, Semicolon);
+                try_basic!(,, Comma);
+                try_basic!(., Dot);
                 try_basic!(=, Equal);
                 try_basic!(+, Plus);
                 try_basic!(-, Minus);
@@ -88,10 +93,6 @@ impl Parse for Mapper {
                 try_basic!(&, Ampersand);
                 try_basic!(<, LeftAngBracket);
                 try_basic!(>, RightAngBracket);
-                try_basic!(<=, LessEqual);
-                try_basic!(>=, GreaterEqual);
-                try_basic!(!=, NotEqual);
-                try_basic!(==, DoubleEqual);
             }
 
             let Some(res) = res else {

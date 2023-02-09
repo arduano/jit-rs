@@ -1,3 +1,5 @@
+use std::arch::x86_64::__m256i;
+
 use jit_rs::codegen::LlvmCodegen;
 use jit_rs::macro_builder::*;
 use jit_rs::mir::mir_parse_module;
@@ -26,20 +28,38 @@ fn main() {
         //     *arg = 10u32;
         // }
         // pub fn vec_op(arg: <u32; 8usize>) -> <u32; 8usize> {
-        //     1u32 - arg
+        //     arg * 3u32
         // }
 
         // pub fn add_together(target: *f32, with: *f32, length: usize) {
         //     1u32 - arg
         // }
 
-        pub fn cast(target: i32) -> f32 {
-            target as f32
-        }
+        // pub fn cast(target: i32) -> f32 {
+        //     target as f32
+        // }
 
         pub fn cast_vec(arr: *i32) {
-            let cast = arr as *<i32; 8usize>;
-            (*cast) = (*cast) * (*cast);
+            let val = load_vec::<<i32; 8usize>>(arr);
+            let val = val * val;
+            store_vec::<<i32; 8usize>>(arr, val);
+        }
+
+        pub fn square_vec(arr: *i32, len: usize) {
+            let i = 0usize;
+
+            while len - i >= 8usize {
+                let val = load_vec::<<i32; 8usize>>(&arr[i]);
+                let val = val * val;
+                store_vec::<<i32; 8usize>>(&arr[i], val);
+                i = i + 8usize;
+            }
+
+            while i < len  {
+                let val = arr[i];
+                arr[i] = val * val;
+                i = i + 1usize;
+            }
         }
     };
 
@@ -101,12 +121,23 @@ fn main() {
         //     .unwrap();
         // compiled.call(514)
 
-        let mut num_arr = [0i32, 1i32, 2i32, 3i32, 4i32, 5i32, 6i32, 7i32];
+        // let mut num_arr = [0i32, 1i32, 2i32, 3i32, 4i32, 5i32, 6i32, 7i32];
+        // let ptr = &mut num_arr as *mut i32;
+        // let compiled = engine
+        //     .get_function::<unsafe extern "C" fn(*mut i32)>("cast_vec")
+        //     .unwrap();
+        // compiled.call(ptr);
+        // num_arr
+
+        let mut num_arr = [
+            0i32, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+            13, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 2, 2, 2
+        ];
         let ptr = &mut num_arr as *mut i32;
         let compiled = engine
-            .get_function::<unsafe extern "C" fn(*mut i32)>("cast_vec")
+            .get_function::<unsafe extern "C" fn(*mut i32, usize)>("square_vec")
             .unwrap();
-        compiled.call(ptr);
+        compiled.call(ptr, num_arr.len());
         num_arr
     };
 

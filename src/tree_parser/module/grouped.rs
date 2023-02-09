@@ -26,11 +26,11 @@ impl TreeIfStatement {
         let cond = get_required_val!(cursor, TreeExpression::parse(cursor, ExprLocation::Other));
 
         let then_cursor = pass_val!(cursor.parse_next_group(JitGroupKind::Braces));
-        let then = get_required_val!(cursor, TreeBody::parse(then_cursor));
+        let then = get_required_val!(TreeBody::parse(then_cursor));
 
         let else_ = if cursor.parse_next_basic(JitBasicToken::Else) {
             let else_cursor = pass_val!(cursor.parse_next_group(JitGroupKind::Braces));
-            let else_ = get_required_val!(cursor, TreeBody::parse(else_cursor));
+            let else_ = get_required_val!(TreeBody::parse(else_cursor));
             Some(else_)
         } else {
             None
@@ -64,7 +64,7 @@ impl TreeWhileStatement {
         let cond = get_required_val!(cursor, TreeExpression::parse(cursor, ExprLocation::Other));
 
         let body_cursor = pass_val!(cursor.parse_next_group(JitGroupKind::Braces));
-        let body = get_required_val!(cursor, TreeBody::parse(body_cursor));
+        let body = get_required_val!(TreeBody::parse(body_cursor));
 
         ParseResult::Ok(
             cursor,

@@ -2,6 +2,7 @@ mod assertions;
 mod blocks;
 mod cast;
 mod expression;
+mod intrinsic_fns;
 mod intrinsics;
 mod misc;
 mod operators;
@@ -28,6 +29,7 @@ use self::{
     assertions::{mir_assert_is_boolean, mir_assert_types_equal},
     blocks::MirBlockBuilder,
     cast::{mir_cast_to_number, mir_cast_to_vector},
+    intrinsic_fns::mir_try_parse_intrinsic_fn,
     misc::{mir_is_empty_type, mir_make_empty_expr},
     operators::mir_parse_unary_expr,
     variables::VariableStorage,
@@ -469,10 +471,20 @@ fn mir_parse_expression(
         }
         TreeExpressionKind::VoidValue(expr) => {
             // Pass pos across, because void is just a marker expression
-            let mut value = mir_parse_expression(&expr, ctx, pos)?;
-            value.ty = MirType::Void;
+            let value = mir_parse_expression(&expr, ctx, pos)?;
 
-            value
+            ctx.blocks.add_statement(MirStatement {
+                kind: MirStatementKind::VoidExpr(value),
+            });
+
+            mir_make_empty_expr()
+        }
+        TreeExpressionKind::StaticFnCall(call) => {
+            if let Some(expr) = mir_try_parse_intrinsic_fn(call, ctx)? {
+                expr
+            } else {
+                todo!()
+            }
         }
     };
 
