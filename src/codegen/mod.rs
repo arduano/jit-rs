@@ -5,7 +5,7 @@ use inkwell::{
     builder::Builder,
     context::Context,
     execution_engine::ExecutionEngine,
-    module::Module,
+    module::{Linkage, Module},
     passes::PassManager,
     targets::{CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetTriple},
     types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FloatType, IntType, VectorType},
@@ -248,9 +248,15 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
 
         let function_type = self.get_fn_type(&function.ret_type, param_types);
 
+        let linking = if function.public {
+            None
+        } else {
+            Some(Linkage::Private)
+        };
+
         let function = self
             .module
-            .add_function(&function.name, function_type, None);
+            .add_function(&function.name, function_type, linking);
 
         function
     }

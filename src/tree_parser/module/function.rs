@@ -12,6 +12,7 @@ use super::{TreeBody, TreeType};
 
 #[derive(Debug, Clone)]
 pub struct TreeFunction {
+    pub public: bool,
     pub name: Cow<'static, str>,
     pub args: Vec<TreeFunctionArg>,
     pub ret_type: Option<TreeType>,
@@ -22,7 +23,7 @@ impl TreeFunction {
     const KIND: &'static str = "function";
 
     pub fn parse<'a>(mut cursor: ParseCursor<'a>) -> ParseResult<'a, Self> {
-        let _is_pub = cursor.parse_next_basic(JitBasicToken::Pub);
+        let is_pub = cursor.parse_next_basic(JitBasicToken::Pub);
 
         if !cursor.parse_next_basic(JitBasicToken::Fn) {
             return ParseResult::no_match(Self::KIND);
@@ -57,6 +58,7 @@ impl TreeFunction {
         ParseResult::Ok(
             cursor,
             Self {
+                public: is_pub,
                 name: name.clone(),
                 args,
                 ret_type,

@@ -9,6 +9,7 @@ pub struct MirModule {
 
 #[derive(Debug, Clone)]
 pub struct MirFunctionDeclaration {
+    pub public: bool,
     pub name: Cow<'static, str>,
     pub args: Vec<MirFunctionArg>,
     pub ret_type: MirType,

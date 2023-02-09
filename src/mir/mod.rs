@@ -78,6 +78,7 @@ pub fn mir_parse_module(module: &TreeModule) -> Result<MirModule, ()> {
 
 pub fn mir_parse_function_decl(function: &TreeFunction) -> Result<MirFunctionDeclaration, ()> {
     Ok(MirFunctionDeclaration {
+        public: function.public,
         ret_type: match function.ret_type {
             Some(ref ty) => mir_parse_type(ty)?,
             None => MirType::Void,
