@@ -1,11 +1,8 @@
-use inkwell::{
-    values::{BasicValueEnum, InstructionOpcode},
-    FloatPredicate, IntPredicate,
-};
+use inkwell::{values::BasicValueEnum, FloatPredicate, IntPredicate};
 
 use crate::mir::{
-    MirBinaryOp, MirCastNumber, MirIntrinsicBinaryOp, MirIntrinsicUnaryOp,
-    MirIntrinsicVectorBinaryOp, MirType, MirUnaryOp, MirVectorBinaryOp,
+    MirBinaryOp, MirIntrinsicBinaryOp, MirIntrinsicUnaryOp, MirIntrinsicVectorBinaryOp, MirUnaryOp,
+    MirVectorBinaryOp,
 };
 
 use super::FunctionInsertContext;

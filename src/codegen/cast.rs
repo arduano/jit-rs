@@ -1,11 +1,11 @@
-use inkwell::values::{BasicValue, BasicValueEnum, IntValue};
+use inkwell::values::{BasicValue, BasicValueEnum};
 
 use crate::{
     common::{FloatBits, IntBits, NumberKind},
-    mir::{MirCastNumber, MirExpressionContext, MirType},
+    mir::{MirCastNumber, MirType},
 };
 
-use super::{FunctionInsertContext, LlvmCodegenModule, SizeBits};
+use super::{FunctionInsertContext, SizeBits};
 
 enum CastNumberKind {
     IntTruncate,

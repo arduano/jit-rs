@@ -1,5 +1,3 @@
-use std::arch::x86_64::__m256i;
-
 use jit_rs::codegen::LlvmCodegen;
 use jit_rs::macro_builder::*;
 use jit_rs::mir::mir_parse_module;
