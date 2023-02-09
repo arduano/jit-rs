@@ -461,6 +461,23 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
             MirExpressionKind::CastNumber(cast) => Some(codegen_number_cast_expr(cast, self)),
             MirExpressionKind::CastVector(_) => todo!(),
             MirExpressionKind::PtrCast(cast) => self.write_expression(cast),
+            MirExpressionKind::FunctionCall(call) => {
+                let function = self.module.module.get_function(&call.name).unwrap();
+
+                let args = call
+                    .args
+                    .iter()
+                    .map(|arg| self.write_expression(arg).unwrap().into())
+                    .collect::<Vec<_>>();
+
+                let ret = self.module.builder.build_call(function, &args, "call");
+
+                if call.is_void {
+                    None
+                } else {
+                    Some(ret.try_as_basic_value().left().unwrap())
+                }
+            }
         }
     }
 

@@ -44,20 +44,7 @@ fn main() {
         }
 
         fn test(arr: *i32, len: usize) {
-            let i = 0usize;
 
-            while len - i >= 8usize {
-                let val = load_vec::<<i32; 8usize>>(&arr[i]);
-                let val = val * val;
-                store_vec::<<i32; 8usize>>(&arr[i], val);
-                i = i + 8usize;
-            }
-
-            while i < len  {
-                let val = arr[i];
-                arr[i] = val * val;
-                i = i + 1usize;
-            }
         }
 
         pub fn square_vec(arr: *i32, len: usize) {

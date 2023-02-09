@@ -1,5 +1,6 @@
 mod assertions;
 mod blocks;
+mod calls;
 mod cast;
 mod expression;
 mod intrinsic_fns;
@@ -28,6 +29,7 @@ use crate::{
 use self::{
     assertions::{mir_assert_is_boolean, mir_assert_types_equal},
     blocks::MirBlockBuilder,
+    calls::mir_parse_static_function_call,
     cast::{mir_cast_to_number, mir_cast_to_vector},
     intrinsic_fns::mir_try_parse_intrinsic_fn,
     misc::{mir_is_empty_type, mir_make_empty_expr},
@@ -481,10 +483,12 @@ fn mir_parse_expression(
             mir_make_empty_expr()
         }
         TreeExpressionKind::StaticFnCall(call) => {
-            if let Some(expr) = mir_try_parse_intrinsic_fn(call, ctx)? {
+            if let Some(expr) = mir_parse_static_function_call(call, ctx)? {
+                expr
+            } else if let Some(expr) = mir_try_parse_intrinsic_fn(call, ctx)? {
                 expr
             } else {
-                todo!()
+                panic!("Unknown function call");
             }
         }
     };

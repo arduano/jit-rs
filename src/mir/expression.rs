@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::common::NumberKind;
 
 use super::{
@@ -43,6 +45,7 @@ pub enum MirExpressionKind {
     VectorExtend(MirVectorExtend),
     PtrCast(Box<MirExpression>),
     IntrinsicOp(Box<MirIntrinsicOp>),
+    FunctionCall(MirFunctionCall),
     NoValue,
 }
 
@@ -110,4 +113,11 @@ pub struct MirIndexPtr {
 #[derive(Debug, Clone)]
 pub struct MirReadArg {
     pub index: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct MirFunctionCall {
+    pub is_void: bool,
+    pub name: Cow<'static, str>,
+    pub args: Vec<MirExpression>,
 }
