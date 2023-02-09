@@ -18,8 +18,12 @@ use crate::{
     mir::*,
 };
 
-use self::intrinsics::{codegen_binary_expr, codegen_unary_expr, codegen_vector_binary_expr};
+use self::{
+    cast::codegen_number_cast_expr,
+    intrinsics::{codegen_binary_expr, codegen_unary_expr, codegen_vector_binary_expr},
+};
 
+mod cast;
 mod intrinsics;
 
 pub struct LlvmCodegen {
@@ -392,7 +396,7 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
             MirExpressionKind::NoValue => None,
             MirExpressionKind::BinaryOp(op) => codegen_binary_expr(op, self),
             MirExpressionKind::VectorBinaryOp(op) => codegen_vector_binary_expr(op, self),
-            MirExpressionKind::UnaryOp(op) => codegen_unary_expr(op, &expr.ty, self),
+            MirExpressionKind::UnaryOp(op) => codegen_unary_expr(op, self),
             MirExpressionKind::IndexPtr(index_ptr) => {
                 let value = self.write_expression(&index_ptr.value).unwrap();
                 let index = self.write_expression(&index_ptr.index).unwrap();
@@ -429,6 +433,9 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
 
                 Some(vector.into())
             }
+            MirExpressionKind::CastNumber(cast) => Some(codegen_number_cast_expr(cast, self)),
+            MirExpressionKind::CastVector(_) => todo!(),
+            MirExpressionKind::PtrCast(cast) => self.write_expression(cast),
         }
     }
 

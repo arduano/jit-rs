@@ -27,9 +27,21 @@ fn main() {
         // pub fn mod_ptr(arg: *u32) {
         //     *arg = 10u32;
         // }
+        // pub fn vec_op(arg: <u32; 8usize>) -> <u32; 8usize> {
+        //     1u32 - arg
+        // }
 
-        pub fn vec_op(arg: <u32; 8usize>) -> <u32; 8usize> {
-            1u32 - arg
+        // pub fn add_together(target: *f32, with: *f32, length: usize) {
+        //     1u32 - arg
+        // }
+
+        pub fn cast(target: i32) -> f32 {
+            target as f32
+        }
+
+        pub fn cast_vec(arr: *i32) {
+            let cast = arr as *<i32; 8usize>;
+            (*cast) = (*cast) * (*cast);
         }
     };
 
@@ -75,16 +87,29 @@ fn main() {
         // compiled.call(num);
         // *num
 
-        let num_arr = [0u32, 1u32, 2u32, 3u32, 4u32, 5u32, 6u32, 7u32];
-        let mut as_mm: __m256i = std::mem::transmute(num_arr);
-        let num_arr = &mut as_mm as *mut __m256i;
-        dbg!(num_arr);
+        // let num_arr = [0u32, 1u32, 2u32, 3u32, 4u32, 5u32, 6u32, 7u32];
+        // let mut as_mm: __m256i = std::mem::transmute(num_arr);
+        // let num_arr = &mut as_mm as *mut __m256i;
+        // dbg!(num_arr);
+        // let compiled = engine
+        //     .get_function::<unsafe extern "C" fn(__m256i) -> __m256i>("vec_op")
+        //     .unwrap();
+        // as_mm = compiled.call(as_mm);
+        // let as_arr: [u32; 8] = std::mem::transmute(as_mm);
+        // as_arr
+
+        // let compiled = engine
+        //     .get_function::<unsafe extern "C" fn(i32) -> f32>("cast")
+        //     .unwrap();
+        // compiled.call(514)
+
+        let mut num_arr = [0i32, 1i32, 2i32, 3i32, 4i32, 5i32, 6i32, 7i32];
+        let ptr = &mut num_arr as *mut i32;
         let compiled = engine
-            .get_function::<unsafe extern "C" fn(__m256i) -> __m256i>("vec_op")
+            .get_function::<unsafe extern "C" fn(*mut i32)>("cast_vec")
             .unwrap();
-        as_mm = compiled.call(as_mm);
-        let as_arr: [u32; 8] = std::mem::transmute(as_mm);
-        as_arr
+        compiled.call(ptr);
+        num_arr
     };
 
     println!("Result: {:?}", result);

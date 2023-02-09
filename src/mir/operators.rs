@@ -7,9 +7,9 @@ use crate::{
 };
 
 use super::{
-    mir_parse_expression, ExprLocation, MirBinaryOp, MirExpression, MirExpressionContext,
-    MirExpressionKind, MirIntrinsicBinaryOp, MirIntrinsicUnaryOp, MirIntrinsicVectorBinaryOp,
-    MirType, MirUnaryOp,
+    mir_deref_expr, mir_parse_expression, ExprLocation, MirBinaryOp, MirExpression,
+    MirExpressionContext, MirExpressionKind, MirIntrinsicBinaryOp, MirIntrinsicUnaryOp,
+    MirIntrinsicVectorBinaryOp, MirType, MirUnaryOp,
 };
 
 #[derive(Debug, Clone)]
@@ -446,10 +446,7 @@ pub fn mir_parse_unary_expr(
                     // This is an edge case where the expression is unaffected
                     return Ok(expr);
                 } else {
-                    (
-                        MirIntrinsicUnaryOp::PointerDeref,
-                        expr.ty.deref_ptr().clone(),
-                    )
+                    return Ok(mir_deref_expr(expr, ctx));
                 }
             } else {
                 return Err(());

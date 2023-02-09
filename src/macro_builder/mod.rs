@@ -48,6 +48,7 @@ pub enum JitBasicToken {
     Arrow,
     Impl,
     Dot,
+    As,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -172,6 +173,7 @@ impl std::fmt::Display for JitTokenTreePrinter<'_> {
                     JitBasicToken::If => write!(f, "if")?,
                     JitBasicToken::While => write!(f, "while")?,
                     JitBasicToken::Else => write!(f, "else")?,
+                    JitBasicToken::As => write!(f, "as")?,
                     JitBasicToken::Colon => write!(f, ":")?,
                     JitBasicToken::Comma => write!(f, ",")?,
                     JitBasicToken::Arrow => write!(f, "->")?,

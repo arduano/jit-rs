@@ -1,5 +1,6 @@
 mod assertions;
 mod blocks;
+mod cast;
 mod expression;
 mod intrinsics;
 mod misc;
@@ -26,6 +27,7 @@ use crate::{
 use self::{
     assertions::{mir_assert_is_boolean, mir_assert_types_equal},
     blocks::MirBlockBuilder,
+    cast::{mir_cast_to_number, mir_cast_to_vector},
     misc::{mir_is_empty_type, mir_make_empty_expr},
     operators::mir_parse_unary_expr,
     variables::VariableStorage,
@@ -446,6 +448,23 @@ fn mir_parse_expression(
                 value
             } else {
                 mir_deref_expr(value, ctx)
+            }
+        }
+        TreeExpressionKind::Cast(cast) => {
+            let value = mir_parse_expression(&cast.value, ctx, ExprLocation::Other)?;
+            let new_ty = mir_parse_type(&cast.new_ty)?;
+
+            match &new_ty {
+                &MirType::Num(ty) => mir_cast_to_number(value, ty)?,
+                &MirType::Vector(ty, width) => mir_cast_to_vector(value, ty, width)?,
+                MirType::Ptr(_) => match &new_ty {
+                    MirType::Ptr(_) => MirExpression {
+                        kind: MirExpressionKind::PtrCast(Box::new(value)),
+                        ty: new_ty,
+                    },
+                    _ => panic!("Unexpected value type for cast operation"),
+                },
+                _ => panic!("Unexpected value type for cast operation"),
             }
         }
         TreeExpressionKind::VoidValue(expr) => {

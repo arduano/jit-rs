@@ -34,11 +34,14 @@ pub enum MirExpressionKind {
     IndexPtr(Box<MirIndexPtr>),
     GetVariablePtr(MirGetVariablePtr),
     PtrDeref(Box<MirPtrDeref>),
+    CastNumber(MirCastNumber),
+    CastVector(MirCastVector),
     Literal(MirLiteral),
     BinaryOp(Box<MirBinaryOp>),
     VectorBinaryOp(Box<MirVectorBinaryOp>),
     UnaryOp(Box<MirUnaryOp>),
     VectorExtend(MirVectorExtend),
+    PtrCast(Box<MirExpression>),
     NoValue,
 }
 
@@ -75,6 +78,20 @@ pub struct MirVectorExtend {
 pub struct MirPtrDeref {
     pub underlying_ty: MirType,
     pub ptr: MirExpression,
+}
+
+#[derive(Debug, Clone)]
+pub struct MirCastNumber {
+    pub from: NumberKind,
+    pub to: NumberKind,
+    pub number: Box<MirExpression>,
+}
+
+#[derive(Debug, Clone)]
+pub struct MirCastVector {
+    pub from: NumberKind,
+    pub to: NumberKind,
+    pub vector: Box<MirExpression>,
 }
 
 #[derive(Debug, Clone)]

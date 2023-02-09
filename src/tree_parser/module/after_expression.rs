@@ -6,7 +6,7 @@ use crate::{
     },
 };
 
-use super::{ExprLocation, TreeBinaryOpKind, TreeExpression};
+use super::{ExprLocation, TreeBinaryOpKind, TreeExpression, TreeType};
 
 #[derive(Debug, Clone)]
 pub struct TreePtrAssign {
@@ -33,6 +33,36 @@ impl TreePtrAssign {
             Self {
                 ptr: Box::new(ptr),
                 value: Box::new(value),
+            },
+        )
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TreeCast {
+    pub value: Box<TreeExpression>,
+    pub new_ty: TreeType,
+}
+
+impl TreeCast {
+    const KIND: &'static str = "value cast";
+
+    pub fn could_match(cursor: &ParseCursor) -> bool {
+        cursor.clone().peek_next_basic(JitBasicToken::As)
+    }
+
+    pub fn parse<'a>(mut cursor: ParseCursor<'a>, ptr: TreeExpression) -> ParseResult<'a, Self> {
+        if !cursor.parse_next_basic(JitBasicToken::As) {
+            return ParseResult::no_match(Self::KIND);
+        }
+
+        let new_ty = get_required_val!(cursor, TreeType::parse(cursor));
+
+        ParseResult::Ok(
+            cursor,
+            Self {
+                value: Box::new(ptr),
+                new_ty,
             },
         )
     }

@@ -1,8 +1,11 @@
-use inkwell::{values::BasicValueEnum, FloatPredicate, IntPredicate};
+use inkwell::{
+    values::{BasicValueEnum, InstructionOpcode},
+    FloatPredicate, IntPredicate,
+};
 
 use crate::mir::{
-    MirBinaryOp, MirIntrinsicBinaryOp, MirIntrinsicUnaryOp, MirIntrinsicVectorBinaryOp, MirType,
-    MirUnaryOp, MirVectorBinaryOp,
+    MirBinaryOp, MirCastNumber, MirIntrinsicBinaryOp, MirIntrinsicUnaryOp,
+    MirIntrinsicVectorBinaryOp, MirType, MirUnaryOp, MirVectorBinaryOp,
 };
 
 use super::FunctionInsertContext;
@@ -349,7 +352,6 @@ pub fn codegen_vector_binary_expr<'ctx>(
 
 pub fn codegen_unary_expr<'ctx>(
     op: &MirUnaryOp,
-    expr_ty: &MirType,
     ctx: &mut FunctionInsertContext<'ctx, '_>,
 ) -> Option<BasicValueEnum<'ctx>> {
     let operand = ctx.write_expression(&op.operand).unwrap();
@@ -369,14 +371,6 @@ pub fn codegen_unary_expr<'ctx>(
         ),
         MirIntrinsicUnaryOp::BoolNot => {
             Some(builder.build_not(operand.into_int_value(), "not").into())
-        }
-        MirIntrinsicUnaryOp::PointerDeref => {
-            let ptr = operand.into_pointer_value();
-            let pointee_ty = ctx.get_type(expr_ty);
-
-            let value = builder.build_load(pointee_ty, ptr, "deref");
-
-            Some(value.into())
         }
     }
 }

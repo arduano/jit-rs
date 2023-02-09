@@ -25,6 +25,7 @@ pub enum TreeExpressionKind {
     Group(TreeBody),
     VarRead(TreeVarRead),
     PtrAssign(TreePtrAssign),
+    Cast(TreeCast),
     Number(TreeNumberLiteral),
     Bool(TreeBoolLiteral),
     Parenthesized(TreeParenthesizedExpr),
@@ -91,6 +92,15 @@ impl TreeExpression {
                     kind: TreeExpressionKind::PtrAssign(get_required_val!(
                         cursor,
                         TreePtrAssign::parse(cursor, expr)
+                    )),
+                };
+                continue;
+            }
+            if TreeCast::could_match(&cursor) {
+                expr = TreeExpression {
+                    kind: TreeExpressionKind::Cast(get_required_val!(
+                        cursor,
+                        TreeCast::parse(cursor, expr)
                     )),
                 };
                 continue;
