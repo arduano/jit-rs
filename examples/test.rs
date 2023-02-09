@@ -65,12 +65,18 @@ fn main() {
             b: i32,
         }
 
+        fn mod_struc(struc: *TestStruc) {
+            struc.b = 10i32;
+        }
+
         pub fn structs(val: i32) -> i32 {
             let struc = TestStruc {
                 a: val,
                 b: 5i32
             };
-            struc.b = 10i32;
+
+            mod_struc(&struc);
+
             struc.a + struc.b
         }
     };

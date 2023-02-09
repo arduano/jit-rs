@@ -12,7 +12,7 @@ mod structures;
 mod ty;
 mod variables;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Deref};
 
 pub use expression::*;
 pub use intrinsics::*;
@@ -575,32 +575,42 @@ fn mir_parse_expression(
             // TODO: Error if this isn't a ptr. We can only index ptr types.
             let ty_inside_ptr = ptr.ty.deref_ptr().clone();
 
-            let value = match &ty_inside_ptr {
-                MirType::Struct(name) => {
-                    // From: parent ptr -> [value -> field]
-                    // To: indexed ptr -> field
-
-                    let struc = ctx.structs.iter().find(|s| s.name == *name).unwrap();
-
-                    let ind = struc.decl.field_indexes.get(&index.field_name);
-                    let Some(&ind) = ind else {
-                        panic!("No field {} on type {:?}", index.field_name, ty_inside_ptr);
-                    };
-
-                    let field_ty = struc.fields[ind].clone();
-                    let result_ty = field_ty.as_ptr();
-
-                    MirExpression {
-                        ty: result_ty,
-                        kind: MirExpressionKind::IndexStruct(Box::new(MirIndexStruct {
-                            value: ptr,
-                            struct_name: name.clone(),
-                            index: ind as u32,
-                            index_ty: field_ty,
-                        })),
-                    }
-                }
+            let (name, should_deref) = match &ty_inside_ptr {
+                MirType::Struct(name) => (name, false),
+                MirType::Ptr(ty) => match ty.deref() {
+                    MirType::Struct(name) => (name, true),
+                    _ => panic!("No field {} on type {:?}", index.field_name, ty_inside_ptr),
+                },
                 _ => panic!("No field {} on type {:?}", index.field_name, ty_inside_ptr),
+            };
+
+            let ptr = if should_deref {
+                mir_deref_expr(ptr, ctx)
+            } else {
+                ptr
+            };
+
+            // From: parent ptr -> [value -> field]
+            // To: indexed ptr -> field
+
+            let struc = ctx.structs.iter().find(|s| s.name == *name).unwrap();
+
+            let ind = struc.decl.field_indexes.get(&index.field_name);
+            let Some(&ind) = ind else {
+                panic!("No field {} on type {:?}", index.field_name, ty_inside_ptr);
+            };
+
+            let field_ty = struc.fields[ind].clone();
+            let result_ty = field_ty.as_ptr();
+
+            let value = MirExpression {
+                ty: result_ty,
+                kind: MirExpressionKind::IndexStruct(Box::new(MirIndexStruct {
+                    value: ptr,
+                    struct_name: name.clone(),
+                    index: ind as u32,
+                    index_ty: field_ty,
+                })),
             };
 
             if pos == ExprLocation::NoDeref {
