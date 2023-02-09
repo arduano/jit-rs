@@ -1,15 +1,11 @@
 use inkwell::{
-    attributes::{Attribute, AttributeLoc},
-    values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum},
-    AddressSpace, FloatPredicate, IntPredicate,
+    values::{BasicValue, BasicValueEnum},
+    FloatPredicate, IntPredicate,
 };
 
-use crate::{
-    codegen::misc::codegen_get_true_vector,
-    mir::{
-        MirBinaryOp, MirIntrinsicBinaryOp, MirIntrinsicOp, MirIntrinsicUnaryOp,
-        MirIntrinsicVectorBinaryOp, MirUnaryOp, MirVectorBinaryOp,
-    },
+use crate::mir::{
+    MirBinaryOp, MirIntrinsicBinaryOp, MirIntrinsicOp, MirIntrinsicUnaryOp,
+    MirIntrinsicVectorBinaryOp, MirUnaryOp, MirVectorBinaryOp,
 };
 
 use super::FunctionInsertContext;

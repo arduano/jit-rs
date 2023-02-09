@@ -6,7 +6,7 @@ use inkwell::{
 use super::FunctionInsertContext;
 
 pub fn codegen_extend_into_vector<'ctx>(
-    ctx: &mut FunctionInsertContext,
+    _ctx: &mut FunctionInsertContext,
     value: BasicValueEnum<'ctx>,
     width: usize,
 ) -> VectorValue<'ctx> {

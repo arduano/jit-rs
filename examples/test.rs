@@ -1,5 +1,3 @@
-use std::arch::x86_64::__m256i;
-
 use jit_rs::codegen::LlvmCodegen;
 use jit_rs::macro_builder::*;
 use jit_rs::mir::mir_parse_module;
@@ -131,7 +129,7 @@ fn main() {
 
         let mut num_arr = [
             0i32, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
-            13, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 2, 2, 2
+            13, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 2, 2, 2,
         ];
         let ptr = &mut num_arr as *mut i32;
         let compiled = engine

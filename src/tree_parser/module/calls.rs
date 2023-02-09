@@ -3,8 +3,8 @@ use std::borrow::Cow;
 use crate::{
     macro_builder::{JitBasicToken, JitGroupKind, JitToken, JitTokenKind},
     tree_parser::{
-        macros::{get_required_val, pass_val},
-        parser::{ParseCursor, ParseError, ParseResult},
+        macros::get_required_val,
+        parser::{ParseCursor, ParseResult},
     },
 };
 
