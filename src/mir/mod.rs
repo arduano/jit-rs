@@ -135,7 +135,7 @@ fn mir_parse_struct(struc: &TreeStruct, ctx: &MirTypeContext) -> Result<MirStruc
 
     let mut fields = Vec::<MirType>::new();
 
-    for (i, field) in struc.fields.iter().enumerate() {
+    for (_i, field) in struc.fields.iter().enumerate() {
         fields.push(mir_parse_type(&field.ty, ctx)?);
     }
 

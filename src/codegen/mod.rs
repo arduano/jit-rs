@@ -31,7 +31,6 @@ use self::{
     intrinsics::{
         codegen_binary_expr, codegen_intrinsic_op, codegen_unary_expr, codegen_vector_binary_expr,
     },
-    misc::codegen_extend_into_vector,
 };
 
 mod cast;
