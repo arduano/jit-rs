@@ -1,6 +1,6 @@
 use crate::common::NumberKind;
 
-use super::MirExpression;
+use super::{MirExpression, MirType};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MirIntrinsicBinaryOp {
@@ -87,4 +87,13 @@ pub enum MirIntrinsicOp {
         scalar_ty: NumberKind,
         width: u32,
     },
+    ExtendToVector {
+        unit_ty: NumberKind,
+        unit: MirExpression,
+        width: u32,
+    },
+    Zeroed {
+        ty: MirType,
+    },
+    Unreachable,
 }

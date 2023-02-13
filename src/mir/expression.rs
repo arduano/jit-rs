@@ -43,7 +43,6 @@ pub enum MirExpressionKind {
     BinaryOp(Box<MirBinaryOp>),
     VectorBinaryOp(Box<MirVectorBinaryOp>),
     UnaryOp(Box<MirUnaryOp>),
-    VectorExtend(MirVectorExtend),
     PtrCast(Box<MirExpression>),
     IntrinsicOp(Box<MirIntrinsicOp>),
     StructInit(MirStructInit),
@@ -71,13 +70,6 @@ pub struct MirVectorBinaryOp {
 pub struct MirUnaryOp {
     pub operand: MirExpression,
     pub op: MirIntrinsicUnaryOp,
-}
-
-#[derive(Debug, Clone)]
-pub struct MirVectorExtend {
-    pub unit_ty: NumberKind,
-    pub unit: Box<MirExpression>,
-    pub width: u32,
 }
 
 #[derive(Debug, Clone)]

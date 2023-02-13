@@ -61,7 +61,7 @@ fn mir_parse_binary_expr_slice(
     let op1_prec = mir_op_precedence(op1);
     let op2_prec = mir_op_precedence(op2);
 
-    let expr = if op1_prec < op2_prec {
+    let expr = if op1_prec >= op2_prec {
         let sealed = seal_mir_binary_expr(left, op1, right)?;
         mir_parse_binary_expr_slice(sealed, op2, expr, ctx)?
     } else {
@@ -74,20 +74,24 @@ fn mir_parse_binary_expr_slice(
 
 fn mir_op_precedence(op: TreeBinaryOpKind) -> u32 {
     match op {
-        TreeBinaryOpKind::Add => 1,
-        TreeBinaryOpKind::Sub => 1,
-        TreeBinaryOpKind::Mul => 2,
-        TreeBinaryOpKind::Div => 2,
-        TreeBinaryOpKind::Mod => 2,
-        TreeBinaryOpKind::Lt => 3,
-        TreeBinaryOpKind::Gt => 3,
-        TreeBinaryOpKind::Eq => 4,
-        TreeBinaryOpKind::Neq => 4,
-        TreeBinaryOpKind::Lte => 3,
-        TreeBinaryOpKind::Gte => 3,
-        TreeBinaryOpKind::BinaryAnd => 3,
-        TreeBinaryOpKind::BinaryOr => 3,
-        TreeBinaryOpKind::BinaryXor => 3,
+        TreeBinaryOpKind::Eq => 10,
+        TreeBinaryOpKind::Neq => 10,
+        TreeBinaryOpKind::Lt => 10,
+        TreeBinaryOpKind::Gt => 10,
+        TreeBinaryOpKind::Lte => 10,
+        TreeBinaryOpKind::Gte => 10,
+
+        TreeBinaryOpKind::Add => 20,
+        TreeBinaryOpKind::Sub => 20,
+
+        TreeBinaryOpKind::Mul => 30,
+        TreeBinaryOpKind::Div => 30,
+
+        TreeBinaryOpKind::Mod => 40,
+
+        TreeBinaryOpKind::BinaryAnd => 50,
+        TreeBinaryOpKind::BinaryOr => 50,
+        TreeBinaryOpKind::BinaryXor => 50,
     }
 }
 
@@ -417,7 +421,10 @@ fn seal_mir_arithmetic_expr(
         _ => {}
     }
 
-    panic!("Operator {:?} not allowed for {:?}", tree_op, left.ty);
+    panic!(
+        "Operator {:?} not allowed between {:?} and {:?}",
+        tree_op, left.ty, right.ty
+    );
     #[allow(unreachable_code)]
     Err(())
 }

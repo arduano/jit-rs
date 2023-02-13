@@ -29,71 +29,74 @@ impl Parse for Mapper {
                 };
             }
 
-            if input.peek(LitInt) {
-                res = Some(parse_lit_int(input)?);
-            } else if input.peek(LitFloat) {
-                res = Some(parse_lit_float(input)?);
-            } else if input.peek(LitBool) {
-                res = Some(parse_lit_bool(input)?);
-            } else if input.peek(Ident) {
-                res = Some(parse_ident(input)?);
-            } else if input.peek(Brace) {
-                let content;
-                let _ = syn::braced!(content in input);
-                let token_tree = Mapper::parse(&content)?.token_tree;
-                res = Some(quote! { JitTokenKind::Grouped {
-                    kind: JitGroupKind::Braces,
-                    tree: #token_tree,
-                } });
-            } else if input.peek(Bracket) {
-                let content;
-                let _ = syn::bracketed!(content in input);
-                let token_tree = Mapper::parse(&content)?.token_tree;
-                res = Some(quote! { JitTokenKind::Grouped {
-                    kind: JitGroupKind::Brackets,
-                    tree: #token_tree,
-                } });
-            } else if input.peek(Paren) {
-                let content;
-                let _ = syn::parenthesized!(content in input);
-                let token_tree = Mapper::parse(&content)?.token_tree;
-                res = Some(quote! { JitTokenKind::Grouped {
-                    kind: JitGroupKind::Parentheses,
-                    tree: #token_tree,
-                } });
-            } else {
-                try_basic!(pub, Pub);
-                try_basic!(fn, Fn);
-                try_basic!(struct, Struct);
-                try_basic!(as, As);
-                try_basic!(if, If);
-                try_basic!(else, Else);
-                try_basic!(impl, Impl);
-                try_basic!(return, Return);
-                try_basic!(loop, Loop);
-                try_basic!(while, While);
-                try_basic!(let, Let);
-                try_basic!(->, Arrow);
-                try_basic!(<=, LessEqual);
-                try_basic!(>=, GreaterEqual);
-                try_basic!(!=, NotEqual);
-                try_basic!(==, DoubleEqual);
-                try_basic!(::, DoubleColon);
-                try_basic!(:, Colon);
-                try_basic!(;, Semicolon);
-                try_basic!(,, Comma);
-                try_basic!(., Dot);
-                try_basic!(=, Equal);
-                try_basic!(+, Plus);
-                try_basic!(-, Minus);
-                try_basic!(*, Star);
-                try_basic!(/, Slash);
-                try_basic!(^, Caret);
-                try_basic!(%, Percent);
-                try_basic!(|, Pipe);
-                try_basic!(&, Ampersand);
-                try_basic!(<, LeftAngBracket);
-                try_basic!(>, RightAngBracket);
+            try_basic!(pub, Pub);
+            try_basic!(fn, Fn);
+            try_basic!(struct, Struct);
+            try_basic!(as, As);
+            try_basic!(if, If);
+            try_basic!(else, Else);
+            try_basic!(impl, Impl);
+            try_basic!(return, Return);
+            try_basic!(loop, Loop);
+            try_basic!(while, While);
+            try_basic!(break, Break);
+            try_basic!(let, Let);
+            try_basic!(->, Arrow);
+            try_basic!(<=, LessEqual);
+            try_basic!(>=, GreaterEqual);
+            try_basic!(!=, NotEqual);
+            try_basic!(==, DoubleEqual);
+            try_basic!(::, DoubleColon);
+            try_basic!(:, Colon);
+            try_basic!(;, Semicolon);
+            try_basic!(,, Comma);
+            try_basic!(., Dot);
+            try_basic!(=, Equal);
+            try_basic!(+, Plus);
+            try_basic!(-, Minus);
+            try_basic!(*, Star);
+            try_basic!(/, Slash);
+            try_basic!(^, Caret);
+            try_basic!(%, Percent);
+            try_basic!(|, Pipe);
+            try_basic!(&, Ampersand);
+            try_basic!(<, LeftAngBracket);
+            try_basic!(>, RightAngBracket);
+
+            if res.is_none() {
+                if input.peek(LitInt) {
+                    res = Some(parse_lit_int(input)?);
+                } else if input.peek(LitFloat) {
+                    res = Some(parse_lit_float(input)?);
+                } else if input.peek(LitBool) {
+                    res = Some(parse_lit_bool(input)?);
+                } else if input.peek(Ident) {
+                    res = Some(parse_ident(input)?);
+                } else if input.peek(Brace) {
+                    let content;
+                    let _ = syn::braced!(content in input);
+                    let token_tree = Mapper::parse(&content)?.token_tree;
+                    res = Some(quote! { JitTokenKind::Grouped {
+                        kind: JitGroupKind::Braces,
+                        tree: #token_tree,
+                    } });
+                } else if input.peek(Bracket) {
+                    let content;
+                    let _ = syn::bracketed!(content in input);
+                    let token_tree = Mapper::parse(&content)?.token_tree;
+                    res = Some(quote! { JitTokenKind::Grouped {
+                        kind: JitGroupKind::Brackets,
+                        tree: #token_tree,
+                    } });
+                } else if input.peek(Paren) {
+                    let content;
+                    let _ = syn::parenthesized!(content in input);
+                    let token_tree = Mapper::parse(&content)?.token_tree;
+                    res = Some(quote! { JitTokenKind::Grouped {
+                        kind: JitGroupKind::Parentheses,
+                        tree: #token_tree,
+                    } });
+                }
             }
 
             let Some(res) = res else {

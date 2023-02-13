@@ -1,4 +1,4 @@
-use super::{MirExpression, MirExpressionKind, MirType, MirVectorExtend};
+use super::{MirExpression, MirExpressionKind, MirIntrinsicOp, MirType};
 
 pub fn mir_extend_num_to_vector(num: MirExpression, width: u32) -> Result<MirExpression, ()> {
     let num_type = match num.ty {
@@ -6,11 +6,11 @@ pub fn mir_extend_num_to_vector(num: MirExpression, width: u32) -> Result<MirExp
         _ => return Err(()),
     };
 
-    let kind = MirExpressionKind::VectorExtend(MirVectorExtend {
-        unit: Box::new(num),
+    let kind = MirExpressionKind::IntrinsicOp(Box::new(MirIntrinsicOp::ExtendToVector {
+        unit: num,
         width,
         unit_ty: num_type,
-    });
+    }));
 
     let new_vec_type = MirType::Vector(num_type, width);
 
@@ -32,5 +32,12 @@ pub fn mir_make_empty_expr() -> MirExpression {
     MirExpression {
         kind: MirExpressionKind::NoValue,
         ty: MirType::Void,
+    }
+}
+
+pub fn mir_make_never_expr() -> MirExpression {
+    MirExpression {
+        kind: MirExpressionKind::NoValue,
+        ty: MirType::Never,
     }
 }

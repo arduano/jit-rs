@@ -29,6 +29,10 @@ impl MirType {
             _ => None,
         }
     }
+
+    pub fn is_never(&self) -> bool {
+        self == &MirType::Never
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

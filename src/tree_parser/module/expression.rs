@@ -17,8 +17,10 @@ pub struct TreeExpression {
 pub enum TreeExpressionKind {
     IfStatement(TreeIfStatement),
     WhileStatement(TreeWhileStatement),
+    LoopStatement(TreeLoopStatement),
     LetStatement(TreeLetStatement),
     ReturnStatement(TreeReturnStatement),
+    BreakStatement(TreeBreakStatement),
     BinaryOpList(TreeBinaryOpList),
     IndexOp(TreeIndexOp),
     UnaryOp(TreeUnaryOp),
@@ -52,6 +54,8 @@ impl TreeExpression {
             TreeExpressionKind::LetStatement(expr)
         } else if let Some(expr) = pass_val!(cursor, TreeWhileStatement::parse(cursor.clone())) {
             TreeExpressionKind::WhileStatement(expr)
+        } else if let Some(expr) = pass_val!(cursor, TreeLoopStatement::parse(cursor.clone())) {
+            TreeExpressionKind::LoopStatement(expr)
         } else if let Some(expr) = pass_val!(cursor, TreeStructInit::parse(cursor.clone())) {
             TreeExpressionKind::StructInit(expr)
         } else if let Some(expr) = pass_val!(cursor, TreeStaticFnCall::parse(cursor.clone())) {
@@ -68,6 +72,8 @@ impl TreeExpression {
             TreeExpressionKind::Parenthesized(expr)
         } else if let Some(expr) = pass_val!(cursor, TreeReturnStatement::parse(cursor.clone())) {
             TreeExpressionKind::ReturnStatement(expr)
+        } else if let Some(expr) = pass_val!(cursor, TreeBreakStatement::parse(cursor.clone())) {
+            TreeExpressionKind::BreakStatement(expr)
         } else {
             dbg!(cursor.peek(0));
             return ParseResult::error("couldn't parse expression");
@@ -191,6 +197,21 @@ impl TreeReturnStatement {
                 value: Box::new(value),
             },
         )
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TreeBreakStatement {}
+
+impl TreeBreakStatement {
+    const KIND: &'static str = "break statement";
+
+    pub fn parse<'a>(mut cursor: ParseCursor<'a>) -> ParseResult<'a, Self> {
+        if !cursor.parse_next_basic(JitBasicToken::Break) {
+            return ParseResult::no_match(Self::KIND);
+        }
+
+        ParseResult::Ok(cursor, Self {})
     }
 }
 

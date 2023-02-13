@@ -8,7 +8,7 @@ use crate::mir::{
     MirIntrinsicVectorBinaryOp, MirUnaryOp, MirVectorBinaryOp,
 };
 
-use super::FunctionInsertContext;
+use super::{misc::codegen_extend_into_vector, FunctionInsertContext};
 
 pub fn codegen_binary_expr<'ctx>(
     op: &MirBinaryOp,
@@ -413,6 +413,24 @@ pub fn codegen_intrinsic_op<'ctx>(
             result.set_alignment(1).unwrap();
 
             None
+        }
+        MirIntrinsicOp::Unreachable => {
+            ctx.module.builder.build_unreachable();
+            None
+        }
+        MirIntrinsicOp::Zeroed { ty } => {
+            let ty = ctx.module.get_type(ty);
+
+            Some(ty.const_zero())
+        }
+        MirIntrinsicOp::ExtendToVector {
+            unit_ty,
+            unit,
+            width,
+        } => {
+            let value = ctx.write_expression(&unit).unwrap();
+
+            Some(codegen_extend_into_vector(ctx, value, *unit_ty, *width as usize).into())
         }
     }
 }

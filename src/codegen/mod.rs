@@ -66,7 +66,7 @@ pub struct LlvmCodegenModule<'ctx> {
     context: &'ctx Context,
     module: Module<'ctx>,
     builder: Builder<'ctx>,
-    structs: HashMap<Cow<'static, str>, StructType<'ctx>>,
+    structs: HashMap<Cow<'static, str>, MirStruct>,
     llvm_intrinsics_added: HashSet<String>,
 }
 
@@ -180,9 +180,8 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
             llvm_intrinsics_added: HashSet::new(),
         };
 
-        let mut functions = Vec::new();
         for struc in mir.structs.iter() {
-            functions.push(module.declare_struct(&struc));
+            module.declare_struct(&struc);
         }
 
         let mut functions = Vec::new();
@@ -239,7 +238,7 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
             MirType::Ptr(ty) => self.get_type(ty).ptr_type(AddressSpace::default()).into(),
             MirType::ConstArray(ty, size) => self.get_type(ty).array_type(*size).into(),
             MirType::Vector(ty, width) => self.get_vector_type(ty, *width).into(),
-            MirType::Struct(name) => self.structs.get(name).unwrap().as_basic_type_enum(),
+            MirType::Struct(name) => self.get_struct(name).as_basic_type_enum(),
         }
     }
 
@@ -278,6 +277,12 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
     }
 
     fn declare_struct(&mut self, struc: &MirStruct) {
+        self.structs.insert(struc.name.clone(), struc.clone());
+    }
+
+    fn get_struct(&self, name: &str) -> StructType<'ctx> {
+        let struc = self.structs.get(name).unwrap();
+
         let fields = struc
             .fields
             .iter()
@@ -286,7 +291,7 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
 
         let ty = self.context.struct_type(&fields, false);
 
-        self.structs.insert(struc.name.clone(), ty);
+        ty
     }
 
     fn implement_function(&mut self, function: &MirFunction, fn_value: FunctionValue<'ctx>) {
@@ -481,11 +486,6 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
 
                 Some(value.into())
             }
-            MirExpressionKind::VectorExtend(extend) => {
-                let value = self.write_expression(&extend.unit).unwrap();
-
-                Some(codegen_extend_into_vector(self, value, extend.width as usize).into())
-            }
             MirExpressionKind::CastNumber(cast) => Some(codegen_number_cast_expr(cast, self)),
             MirExpressionKind::CastVector(_) => todo!(),
             MirExpressionKind::PtrCast(cast) => self.write_expression(cast),
@@ -512,9 +512,7 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
 
                 let struct_ty = self
                     .module
-                    .structs
-                    .get(&index.struct_name)
-                    .unwrap()
+                    .get_struct(&index.struct_name)
                     .as_basic_type_enum();
 
                 let ptr = self
@@ -536,7 +534,7 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
                     })
                     .collect();
 
-                let struct_ty = self.module.structs.get(&init.name).unwrap();
+                let struct_ty = self.module.get_struct(&init.name);
 
                 let defaults: Vec<_> = values.iter().map(|v| v.get_type().const_zero()).collect();
                 let struc = struct_ty.const_named_struct(&defaults);

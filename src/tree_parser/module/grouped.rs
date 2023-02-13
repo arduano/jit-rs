@@ -6,7 +6,7 @@ use crate::{
     },
 };
 
-use super::{ExprLocation, TreeBody, TreeExpression};
+use super::{ExprLocation, TreeBody, TreeExpression, TreeExpressionKind};
 
 #[derive(Debug, Clone)]
 pub struct TreeIfStatement {
@@ -29,9 +29,18 @@ impl TreeIfStatement {
         let then = get_required_val!(TreeBody::parse(then_cursor));
 
         let else_ = if cursor.parse_next_basic(JitBasicToken::Else) {
-            let else_cursor = pass_val!(cursor.parse_next_group(JitGroupKind::Braces));
-            let else_ = get_required_val!(TreeBody::parse(else_cursor));
-            Some(else_)
+            if cursor.peek_next_basic(JitBasicToken::If) {
+                let else_if = get_required_val!(cursor, TreeIfStatement::parse(cursor));
+                Some(TreeBody {
+                    body: vec![TreeExpression {
+                        kind: TreeExpressionKind::IfStatement(else_if),
+                    }],
+                })
+            } else {
+                let else_cursor = pass_val!(cursor.parse_next_group(JitGroupKind::Braces));
+                let else_ = get_required_val!(TreeBody::parse(else_cursor));
+                Some(else_)
+            }
         } else {
             None
         };
@@ -73,5 +82,25 @@ impl TreeWhileStatement {
                 body,
             },
         )
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TreeLoopStatement {
+    pub body: TreeBody,
+}
+
+impl TreeLoopStatement {
+    const KIND: &'static str = "loop statement";
+
+    pub fn parse<'a>(mut cursor: ParseCursor<'a>) -> ParseResult<'a, Self> {
+        if !cursor.parse_next_basic(JitBasicToken::Loop) {
+            return ParseResult::no_match(Self::KIND);
+        }
+
+        let body_cursor = pass_val!(cursor.parse_next_group(JitGroupKind::Braces));
+        let body = get_required_val!(TreeBody::parse(body_cursor));
+
+        ParseResult::Ok(cursor, Self { body })
     }
 }

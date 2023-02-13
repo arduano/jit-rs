@@ -31,11 +31,11 @@ use crate::{
 
 use self::{
     assertions::{mir_assert_is_boolean, mir_assert_types_equal},
-    blocks::MirBlockBuilder,
+    blocks::{MirBlockBuilder, MirBlockId},
     calls::mir_parse_static_function_call,
     cast::{mir_cast_to_number, mir_cast_to_vector},
     intrinsic_fns::mir_try_parse_intrinsic_fn,
-    misc::{mir_is_empty_type, mir_make_empty_expr},
+    misc::{mir_is_empty_type, mir_make_empty_expr, mir_make_never_expr},
     operators::mir_parse_unary_expr,
     variables::VariableStorage,
 };
@@ -51,6 +51,10 @@ struct MirFunctionContext<'a> {
     return_ty: MirType,
 }
 
+struct LoopContext {
+    break_block: MirBlockId,
+}
+
 pub struct MirExpressionContext<'a> {
     fn_ctx: &'a MirFunctionContext<'a>,
     functions: &'a [MirFunctionDeclaration],
@@ -58,6 +62,7 @@ pub struct MirExpressionContext<'a> {
     ty: &'a MirTypeContext<'a>,
     blocks: MirBlockBuilder,
     variables: VariableStorage,
+    loop_stack: Vec<LoopContext>,
 }
 
 pub fn mir_parse_module(module: &TreeModule) -> Result<MirModule, ()> {
@@ -182,6 +187,7 @@ fn mir_parse_function(
         ty: ctx.ty,
         blocks: MirBlockBuilder::new(),
         variables: VariableStorage::new(),
+        loop_stack: Vec::new(),
     };
 
     ctx.variables.push_scope();
@@ -206,18 +212,20 @@ fn mir_parse_function(
     let final_expr = mir_parse_body(&function.body, &mut ctx)?;
     ctx.variables.pop_scope();
 
-    mir_assert_types_equal(&final_expr.ty, &ctx.fn_ctx.return_ty)?;
+    if !final_expr.ty.is_never() {
+        mir_assert_types_equal(&final_expr.ty, &ctx.fn_ctx.return_ty)?;
 
-    let return_val = if !mir_is_empty_type(&final_expr.ty) {
-        Some(final_expr)
-    } else {
-        None
-    };
+        let return_val = if !mir_is_empty_type(&final_expr.ty) {
+            Some(final_expr)
+        } else {
+            None
+        };
 
-    let ret = MirStatement {
-        kind: MirStatementKind::Return(return_val),
-    };
-    ctx.blocks.add_statement(ret);
+        let ret = MirStatement {
+            kind: MirStatementKind::Return(return_val),
+        };
+        ctx.blocks.add_statement(ret);
+    }
 
     Ok(MirFunction {
         variables: ctx.variables.get_variables(),
@@ -306,7 +314,7 @@ fn mir_parse_body(body: &TreeBody, ctx: &mut MirExpressionContext) -> Result<Mir
         let is_last = i == body.body.len() - 1;
         let expr = mir_parse_expression(expr, ctx, ExprLocation::Root)?;
 
-        if is_last {
+        if is_last || expr.ty.is_never() {
             return Ok(expr);
         }
     }
@@ -351,7 +359,10 @@ fn mir_parse_expression(
         TreeExpressionKind::UnaryOp(unary) => mir_parse_unary_expr(unary, ctx, pos)?,
         TreeExpressionKind::Group(inner) => mir_parse_body(inner, ctx)?,
         TreeExpressionKind::VarRead(read) => {
-            let var = ctx.variables.get(&read.name).unwrap();
+            let var = ctx
+                .variables
+                .get(&read.name)
+                .expect(format!("Unknown variable: {}", read.name).as_ref());
             let expr = MirExpression {
                 kind: MirExpressionKind::GetVariablePtr(MirGetVariablePtr { var: var.as_var() }),
                 ty: var.ty.as_ptr().clone(),
@@ -366,8 +377,6 @@ fn mir_parse_expression(
         TreeExpressionKind::PtrAssign(statement) => {
             let ptr = mir_parse_expression(&statement.ptr, ctx, ExprLocation::NoDeref)?;
             let value = mir_parse_expression(&statement.value, ctx, ExprLocation::Other)?;
-
-            dbg!(&statement.ptr);
 
             if let Some(ptr_ty) = ptr.ty.try_deref_ptr() {
                 mir_assert_types_equal(&ptr_ty, &value.ty)?;
@@ -389,11 +398,17 @@ fn mir_parse_expression(
             use MirLiteral as Lit;
             use NumberKind::*;
 
+            // FIXME: Parse numbers with underscores
+
             let value = &num.value;
             let literal = match num.ty {
                 UnsignedInt(IB::Bits8) => Lit::U8(value.parse().unwrap()),
                 UnsignedInt(IB::Bits16) => Lit::U16(value.parse().unwrap()),
-                UnsignedInt(IB::Bits32) => Lit::U32(value.parse().unwrap()),
+                UnsignedInt(IB::Bits32) => Lit::U32(
+                    value
+                        .parse()
+                        .expect(&format!("Failed to parse {} as u32", value)),
+                ),
                 UnsignedInt(IB::Bits64) => Lit::U64(value.parse().unwrap()),
                 UnsignedInt(IB::BitsSize) => Lit::USize(value.parse().unwrap()),
                 SignedInt(IB::Bits8) => Lit::I8(value.parse().unwrap()),
@@ -421,7 +436,7 @@ fn mir_parse_expression(
             ctx.blocks.add_statement(MirStatement {
                 kind: MirStatementKind::Return(Some(value)),
             });
-            mir_make_empty_expr()
+            mir_make_never_expr()
         }
         TreeExpressionKind::WhileStatement(statement) => {
             let loop_start = ctx.blocks.add_block();
@@ -449,18 +464,68 @@ fn mir_parse_expression(
             ctx.blocks.add_statement(jump);
 
             ctx.blocks.select_block(loop_body);
-            mir_parse_body(&statement.body, ctx)?;
 
-            let jump = MirStatement {
-                kind: MirStatementKind::Jump(MirJump {
-                    index: loop_start.index,
-                }),
-            };
-            ctx.blocks.add_statement(jump);
+            ctx.loop_stack.push(LoopContext {
+                break_block: end_block,
+            });
+            let expr = mir_parse_body(&statement.body, ctx)?;
+            ctx.loop_stack.pop();
+
+            if !expr.ty.is_never() {
+                let jump = MirStatement {
+                    kind: MirStatementKind::Jump(MirJump {
+                        index: loop_start.index,
+                    }),
+                };
+                ctx.blocks.add_statement(jump);
+            }
 
             ctx.blocks.select_block(end_block);
 
             mir_make_empty_expr()
+        }
+        TreeExpressionKind::LoopStatement(statement) => {
+            let loop_body = ctx.blocks.add_block();
+            let end_block = ctx.blocks.add_block();
+
+            let jump = MirStatement {
+                kind: MirStatementKind::Jump(MirJump {
+                    index: loop_body.index,
+                }),
+            };
+            ctx.blocks.add_statement(jump);
+
+            ctx.blocks.select_block(loop_body);
+
+            ctx.loop_stack.push(LoopContext {
+                break_block: end_block,
+            });
+            let expr = mir_parse_body(&statement.body, ctx)?;
+            ctx.loop_stack.pop();
+
+            if !expr.ty.is_never() {
+                let jump = MirStatement {
+                    kind: MirStatementKind::Jump(MirJump {
+                        index: loop_body.index,
+                    }),
+                };
+                ctx.blocks.add_statement(jump);
+            }
+
+            ctx.blocks.select_block(end_block);
+
+            mir_make_empty_expr()
+        }
+        TreeExpressionKind::BreakStatement(_) => {
+            let loop_ctx = ctx.loop_stack.last().unwrap();
+            let jump = MirStatement {
+                kind: MirStatementKind::Jump(MirJump {
+                    index: loop_ctx.break_block.index,
+                }),
+            };
+            ctx.blocks.add_statement(jump);
+
+            mir_make_never_expr()
         }
         TreeExpressionKind::Parenthesized(expr) => mir_parse_expression(&expr.inner, ctx, pos)?,
         TreeExpressionKind::IndexOp(index) => {
@@ -554,11 +619,17 @@ fn mir_parse_expression(
             // Pass pos across, because void is just a marker expression
             let value = mir_parse_expression(&expr, ctx, pos)?;
 
+            let never = value.ty.is_never();
+
             ctx.blocks.add_statement(MirStatement {
                 kind: MirStatementKind::VoidExpr(value),
             });
 
-            mir_make_empty_expr()
+            if never {
+                mir_make_never_expr()
+            } else {
+                mir_make_empty_expr()
+            }
         }
         TreeExpressionKind::StaticFnCall(call) => {
             if let Some(expr) = mir_parse_static_function_call(call, ctx)? {
@@ -715,23 +786,39 @@ fn mir_insert_condition(
     };
     let else_block_end = ctx.blocks.current_block().unwrap();
 
-    mir_assert_types_equal(&then_value.ty, &else_value.ty)?;
+    let then_ty = then_value.ty.clone();
+    let else_ty = else_value.ty.clone();
 
-    let value = if !mir_is_empty_type(&then_value.ty) {
-        let ty = then_value.ty.clone();
+    let result_ty = if then_value.ty.is_never() && else_value.ty.is_never() {
+        &MirType::Never
+    } else if then_value.ty.is_never() {
+        &else_ty
+    } else if else_value.ty.is_never() {
+        &then_ty
+    } else {
+        mir_assert_types_equal(&then_value.ty, &else_value.ty)?;
+        &then_ty
+    };
+
+    let value = if !mir_is_empty_type(&result_ty) {
+        let ty = then_ty.clone();
 
         // We don't do phi, so just jump around the blocks with a variable
         ctx.blocks.select_block(start_block);
 
         let var_decl = ctx.variables.declare_nameless(ty.clone());
 
-        ctx.blocks.select_block(then_block_end);
-        let assign = MirStatement::set_variable(var_decl.clone(), then_value);
-        ctx.blocks.add_statement(assign);
+        if !then_ty.is_never() {
+            ctx.blocks.select_block(then_block_end);
+            let assign = MirStatement::set_variable(var_decl.clone(), then_value);
+            ctx.blocks.add_statement(assign);
+        }
 
-        ctx.blocks.select_block(else_block_end);
-        let assign = MirStatement::set_variable(var_decl.clone(), else_value);
-        ctx.blocks.add_statement(assign);
+        if !else_ty.is_never() {
+            ctx.blocks.select_block(else_block_end);
+            let assign = MirStatement::set_variable(var_decl.clone(), else_value);
+            ctx.blocks.add_statement(assign);
+        }
 
         MirExpression {
             ty,
@@ -741,12 +828,10 @@ fn mir_insert_condition(
         }
     } else {
         MirExpression {
-            ty: then_value.ty,
+            ty: result_ty.clone(),
             kind: MirExpressionKind::NoValue,
         }
     };
-
-    let end_block = ctx.blocks.add_block();
 
     // Append all the jumps
     ctx.blocks.select_block(start_block);
@@ -758,19 +843,30 @@ fn mir_insert_condition(
         }),
     });
 
-    ctx.blocks.select_block(then_block_end);
-    ctx.blocks.add_statement(MirStatement {
-        kind: MirStatementKind::Jump(MirJump {
-            index: end_block.index,
-        }),
-    });
+    // If the result type is never, we don't need to do any jumps
+    if result_ty.is_never() {
+        return Ok(value);
+    }
 
-    ctx.blocks.select_block(else_block_end);
-    ctx.blocks.add_statement(MirStatement {
-        kind: MirStatementKind::Jump(MirJump {
-            index: end_block.index,
-        }),
-    });
+    let end_block = ctx.blocks.add_block();
+
+    if !then_ty.is_never() {
+        ctx.blocks.select_block(then_block_end);
+        ctx.blocks.add_statement(MirStatement {
+            kind: MirStatementKind::Jump(MirJump {
+                index: end_block.index,
+            }),
+        });
+    }
+
+    if !else_ty.is_never() {
+        ctx.blocks.select_block(else_block_end);
+        ctx.blocks.add_statement(MirStatement {
+            kind: MirStatementKind::Jump(MirJump {
+                index: end_block.index,
+            }),
+        });
+    }
 
     ctx.blocks.select_block(end_block);
 
