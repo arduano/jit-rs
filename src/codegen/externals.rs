@@ -1,6 +1,6 @@
 use std::alloc::Layout;
 
-use inkwell::{execution_engine::ExecutionEngine, module::Module, types::BasicType, AddressSpace};
+use inkwell::{execution_engine::ExecutionEngine, module::Module, AddressSpace};
 
 pub fn module_append_external_functions(module: &Module) {
     let ctx = module.get_context();
