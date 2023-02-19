@@ -28,7 +28,7 @@ impl TreePtrAssign {
             return ParseResult::no_match(Self::KIND);
         }
 
-        let value = get_required_val!(cursor, TreeExpression::parse(cursor, ExprLocation::Other));
+        let value = get_required_val!(cursor, TreeExpression::parse(cursor, ExprLocation::BASIC));
 
         ParseResult::Ok(
             cursor,
@@ -83,26 +83,26 @@ impl TreeBinaryOpList {
         TreeBinaryOpKind::parse(cursor.clone()).is_ok()
     }
 
-    pub fn parse<'a>(mut cursor: ParseCursor<'a>, first: TreeExpression) -> ParseResult<'a, Self> {
+    pub fn parse<'a>(
+        mut cursor: ParseCursor<'a>,
+        first: TreeExpression,
+        pos: ExprLocation,
+    ) -> ParseResult<'a, Self> {
         let Some(first_op) = pass_val!(cursor, TreeBinaryOpKind::parse(cursor.clone())) else {
             return ParseResult::no_match(Self::KIND);
         };
 
+        let inner_pos = pos - ExprLocation::ALLOW_BINARY_EXPR;
+
         let mut pairs = vec![(first, first_op)];
-        let mut last = get_required_val!(
-            cursor,
-            TreeExpression::parse(cursor.clone(), ExprLocation::BinaryOperand)
-        );
+        let mut last = get_required_val!(cursor, TreeExpression::parse(cursor.clone(), inner_pos));
 
         loop {
             let Some(op) = pass_val!(cursor, TreeBinaryOpKind::parse(cursor.clone())) else {
                 break;
             };
 
-            let right = get_required_val!(
-                cursor,
-                TreeExpression::parse(cursor.clone(), ExprLocation::BinaryOperand)
-            );
+            let right = get_required_val!(cursor, TreeExpression::parse(cursor.clone(), inner_pos));
 
             pairs.push((last, op));
             last = right;
@@ -138,7 +138,7 @@ impl TreeIndexOp {
         if let Ok(mut inner_cursor) = cursor.parse_next_group(JitGroupKind::Brackets) {
             let inner = get_required_val!(
                 inner_cursor,
-                TreeExpression::parse(inner_cursor, ExprLocation::Other)
+                TreeExpression::parse(inner_cursor, ExprLocation::BASIC)
             );
 
             if !inner_cursor.is_empty() {

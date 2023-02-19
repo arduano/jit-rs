@@ -23,7 +23,10 @@ impl TreeIfStatement {
             return ParseResult::no_match(Self::KIND);
         }
 
-        let cond = get_required_val!(cursor, TreeExpression::parse(cursor, ExprLocation::Other));
+        let cond = get_required_val!(
+            cursor,
+            TreeExpression::parse(cursor, ExprLocation::CONDITION)
+        );
 
         let then_cursor = pass_val!(cursor.parse_next_group(JitGroupKind::Braces));
         let then = get_required_val!(TreeBody::parse(then_cursor));
@@ -70,7 +73,10 @@ impl TreeWhileStatement {
             return ParseResult::no_match(Self::KIND);
         }
 
-        let cond = get_required_val!(cursor, TreeExpression::parse(cursor, ExprLocation::Other));
+        let cond = get_required_val!(
+            cursor,
+            TreeExpression::parse(cursor, ExprLocation::CONDITION)
+        );
 
         let body_cursor = pass_val!(cursor.parse_next_group(JitGroupKind::Braces));
         let body = get_required_val!(TreeBody::parse(body_cursor));

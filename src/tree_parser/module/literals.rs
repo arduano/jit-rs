@@ -3,7 +3,10 @@ use std::borrow::Cow;
 use crate::{
     common::NumberKind,
     macro_builder::{JitToken, JitTokenKind},
-    tree_parser::parser::{ParseCursor, ParseResult},
+    tree_parser::{
+        macros::pass_val,
+        parser::{ParseCursor, ParseResult},
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -55,6 +58,26 @@ impl TreeBoolLiteral {
             ParseResult::Ok(cursor, Self { value: *val })
         } else {
             ParseResult::no_match(Self::KIND)
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum TreeLiteral {
+    Number(TreeNumberLiteral),
+    Bool(TreeBoolLiteral),
+}
+
+impl TreeLiteral {
+    const KIND: &'static str = "literal";
+
+    pub fn parse<'a>(mut cursor: ParseCursor<'a>) -> ParseResult<'a, Self> {
+        if let Some(lit) = pass_val!(cursor, TreeNumberLiteral::parse(cursor.clone())) {
+            return ParseResult::Ok(cursor, Self::Number(lit));
+        } else if let Some(lit) = pass_val!(cursor, TreeBoolLiteral::parse(cursor.clone())) {
+            return ParseResult::Ok(cursor, Self::Bool(lit));
+        } else {
+            return ParseResult::no_match(Self::KIND);
         }
     }
 }

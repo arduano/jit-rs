@@ -21,6 +21,7 @@ pub enum JitTokenKind {
 pub enum JitBasicToken {
     Semicolon,
     Return,
+    Const,
     Let,
     DoubleEqual,
     Equal,
@@ -174,6 +175,7 @@ impl std::fmt::Display for JitTokenTreePrinter<'_> {
                     JitBasicToken::Pub => write!(f, "pub")?,
                     JitBasicToken::Fn => write!(f, "fn")?,
                     JitBasicToken::Struct => write!(f, "struct")?,
+                    JitBasicToken::Const => write!(f, "const")?,
                     JitBasicToken::If => write!(f, "if")?,
                     JitBasicToken::While => write!(f, "while")?,
                     JitBasicToken::Else => write!(f, "else")?,

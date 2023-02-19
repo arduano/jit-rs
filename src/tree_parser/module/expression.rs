@@ -5,6 +5,7 @@ use crate::{
         parser::{ParseCursor, ParseResult},
     },
 };
+use bitflags::bitflags;
 
 use super::*;
 
@@ -30,22 +31,40 @@ pub enum TreeExpressionKind {
     PtrAssign(TreePtrAssign),
     IndexField(TreeIndexField),
     Cast(TreeCast),
-    Number(TreeNumberLiteral),
-    Bool(TreeBoolLiteral),
+    Literal(TreeLiteral),
     StaticFnCall(TreeStaticFnCall),
     Parenthesized(TreeParenthesizedExpr),
     VoidValue(Box<TreeExpression>),
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum ExprLocation {
-    Root,
-    Other,
-    BinaryOperand,
+// #[derive(Debug, Clone, Copy, Eq, PartialEq)]
+// pub enum ExprLocation {
+//     Root,
+//     Other,
+//     BinaryOperand,
+//     Condition,
+// }
+
+bitflags! {
+    // #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct ExprLocation: u32 {
+        const ALLOW_SEMICOLON = 1 << 0;
+        const ALLOW_STRUCT_INIT = 1 << 1;
+        const ALLOW_BINARY_EXPR = 1 << 2;
+        const ALLOW_ASSIGN = 1 << 3;
+
+        const ROOT_ONLY = Self::ALLOW_SEMICOLON.bits | Self::ALLOW_ASSIGN.bits;
+        const ROOT = Self::ROOT_ONLY.bits | Self::ALLOW_BINARY_EXPR.bits | Self::ALLOW_STRUCT_INIT.bits;
+
+        const BASIC = Self::ALLOW_STRUCT_INIT.bits | Self::ALLOW_BINARY_EXPR.bits;
+        const CONDITION = Self::ALLOW_BINARY_EXPR.bits;
+    }
 }
 
 impl TreeExpression {
     pub fn parse<'a>(mut cursor: ParseCursor<'a>, pos: ExprLocation) -> ParseResult<'a, Self> {
+        let inner_pos = pos - ExprLocation::ROOT_ONLY;
+
         let expr_kind = if let Some(expr) =
             pass_val!(cursor, TreeIfStatement::parse(cursor.clone()))
         {
@@ -56,18 +75,21 @@ impl TreeExpression {
             TreeExpressionKind::WhileStatement(expr)
         } else if let Some(expr) = pass_val!(cursor, TreeLoopStatement::parse(cursor.clone())) {
             TreeExpressionKind::LoopStatement(expr)
-        } else if let Some(expr) = pass_val!(cursor, TreeStructInit::parse(cursor.clone())) {
+        } else if let Some(expr) = pass_val!(
+            cursor,
+            TreeStructInit::parse(cursor.clone())
+                .skip_if(!pos.contains(ExprLocation::ALLOW_STRUCT_INIT))
+        ) {
             TreeExpressionKind::StructInit(expr)
         } else if let Some(expr) = pass_val!(cursor, TreeStaticFnCall::parse(cursor.clone())) {
             TreeExpressionKind::StaticFnCall(expr)
         } else if let Some(expr) = pass_val!(cursor, TreeVarRead::parse(cursor.clone())) {
             TreeExpressionKind::VarRead(expr)
-        } else if let Some(expr) = pass_val!(cursor, TreeUnaryOp::parse(cursor.clone())) {
+        } else if let Some(expr) = pass_val!(cursor, TreeUnaryOp::parse(cursor.clone(), inner_pos))
+        {
             TreeExpressionKind::UnaryOp(expr)
-        } else if let Some(expr) = pass_val!(cursor, TreeNumberLiteral::parse(cursor.clone())) {
-            TreeExpressionKind::Number(expr)
-        } else if let Some(expr) = pass_val!(cursor, TreeBoolLiteral::parse(cursor.clone())) {
-            TreeExpressionKind::Bool(expr)
+        } else if let Some(expr) = pass_val!(cursor, TreeLiteral::parse(cursor.clone())) {
+            TreeExpressionKind::Literal(expr)
         } else if let Some(expr) = pass_val!(cursor, TreeParenthesizedExpr::parse(cursor.clone())) {
             TreeExpressionKind::Parenthesized(expr)
         } else if let Some(expr) = pass_val!(cursor, TreeReturnStatement::parse(cursor.clone())) {
@@ -82,7 +104,7 @@ impl TreeExpression {
         let mut expr = TreeExpression { kind: expr_kind };
 
         loop {
-            if pos == ExprLocation::Root {
+            if pos.contains(ExprLocation::ALLOW_SEMICOLON) {
                 if cursor.parse_next_basic(JitBasicToken::Semicolon) {
                     expr = TreeExpression {
                         kind: TreeExpressionKind::VoidValue(Box::new(expr)),
@@ -91,16 +113,18 @@ impl TreeExpression {
                 }
             }
 
-            if pos != ExprLocation::BinaryOperand && TreeBinaryOpList::could_match(&cursor) {
+            if pos.contains(ExprLocation::ALLOW_BINARY_EXPR)
+                && TreeBinaryOpList::could_match(&cursor)
+            {
                 expr = TreeExpression {
                     kind: TreeExpressionKind::BinaryOpList(get_required_val!(
                         cursor,
-                        TreeBinaryOpList::parse(cursor, expr)
+                        TreeBinaryOpList::parse(cursor, expr, inner_pos)
                     )),
                 };
                 continue;
             }
-            if pos == ExprLocation::Root && TreePtrAssign::could_match(&cursor) {
+            if pos.contains(ExprLocation::ALLOW_ASSIGN) && TreePtrAssign::could_match(&cursor) {
                 expr = TreeExpression {
                     kind: TreeExpressionKind::PtrAssign(get_required_val!(
                         cursor,
@@ -164,7 +188,7 @@ impl TreeLetStatement {
             return ParseResult::error("expected '=' after variable name");
         }
 
-        let value = get_required_val!(cursor, TreeExpression::parse(cursor, ExprLocation::Other));
+        let value = get_required_val!(cursor, TreeExpression::parse(cursor, ExprLocation::BASIC));
 
         ParseResult::Ok(
             cursor,
@@ -189,7 +213,7 @@ impl TreeReturnStatement {
             return ParseResult::no_match(Self::KIND);
         }
 
-        let value = get_required_val!(cursor, TreeExpression::parse(cursor, ExprLocation::Other));
+        let value = get_required_val!(cursor, TreeExpression::parse(cursor, ExprLocation::BASIC));
 
         ParseResult::Ok(
             cursor,
@@ -224,12 +248,9 @@ pub struct TreeUnaryOp {
 impl TreeUnaryOp {
     const KIND: &'static str = "unary operator";
 
-    pub fn parse<'a>(mut cursor: ParseCursor<'a>) -> ParseResult<'a, Self> {
+    pub fn parse<'a>(mut cursor: ParseCursor<'a>, pos: ExprLocation) -> ParseResult<'a, Self> {
         if let Some(op) = pass_val!(cursor, TreeUnaryOpKind::parse(cursor.clone())) {
-            let expr = get_required_val!(
-                cursor,
-                TreeExpression::parse(cursor.clone(), ExprLocation::Other)
-            );
+            let expr = get_required_val!(cursor, TreeExpression::parse(cursor.clone(), pos));
 
             ParseResult::Ok(
                 cursor,
@@ -277,7 +298,7 @@ impl TreeParenthesizedExpr {
         if let Ok(mut inner_cursor) = cursor.parse_next_group(JitGroupKind::Parentheses) {
             let inner = get_required_val!(
                 inner_cursor,
-                TreeExpression::parse(inner_cursor, ExprLocation::Other)
+                TreeExpression::parse(inner_cursor, ExprLocation::BASIC)
             );
 
             if !inner_cursor.is_empty() {
@@ -303,7 +324,7 @@ pub struct TreeStructInit {
 }
 
 impl TreeStructInit {
-    const KIND: &'static str = "parenthesized expression";
+    const KIND: &'static str = "struct initialization";
 
     pub fn parse<'a>(mut cursor: ParseCursor<'a>) -> ParseResult<'a, Self> {
         if let Some(JitToken {
@@ -383,7 +404,7 @@ impl TreeStructInitField {
             return ParseResult::no_match("struct field");
         }
 
-        let expr = get_required_val!(cursor, TreeExpression::parse(cursor, ExprLocation::Other));
+        let expr = get_required_val!(cursor, TreeExpression::parse(cursor, ExprLocation::BASIC));
 
         ParseResult::Ok(
             cursor,

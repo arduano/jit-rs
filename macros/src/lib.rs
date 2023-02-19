@@ -32,6 +32,7 @@ impl Parse for Mapper {
             try_basic!(pub, Pub);
             try_basic!(fn, Fn);
             try_basic!(struct, Struct);
+            try_basic!(const, Const);
             try_basic!(as, As);
             try_basic!(if, If);
             try_basic!(else, Else);

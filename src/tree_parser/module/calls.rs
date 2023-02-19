@@ -52,7 +52,7 @@ impl TreeStaticFnCall {
             while !paren_cursor.is_empty() {
                 let arg = get_required_val!(
                     paren_cursor,
-                    TreeExpression::parse(paren_cursor.clone(), ExprLocation::Other)
+                    TreeExpression::parse(paren_cursor.clone(), ExprLocation::BASIC)
                 );
 
                 args.push(arg);

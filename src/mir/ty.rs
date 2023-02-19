@@ -2,7 +2,7 @@ use std::{borrow::Cow, fmt::Formatter};
 
 use crate::{
     common::{FloatBits, IntBits, NumberKind},
-    tree_parser::{TreeBoolLiteral, TreeNumberLiteral},
+    tree_parser::{TreeBoolLiteral, TreeLiteral, TreeNumberLiteral},
 };
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -92,9 +92,34 @@ impl MirLiteral {
             MirLiteral::F64(n) => write!(f, "{}f64", n),
         }
     }
+
+    pub fn ty(&self) -> MirType {
+        match self {
+            MirLiteral::Bool(_) => MirType::Bool,
+            MirLiteral::U8(_) => MirType::Num(NumberKind::UnsignedInt(IntBits::Bits8)),
+            MirLiteral::U16(_) => MirType::Num(NumberKind::UnsignedInt(IntBits::Bits16)),
+            MirLiteral::U32(_) => MirType::Num(NumberKind::UnsignedInt(IntBits::Bits32)),
+            MirLiteral::U64(_) => MirType::Num(NumberKind::UnsignedInt(IntBits::Bits64)),
+            MirLiteral::USize(_) => MirType::Num(NumberKind::UnsignedInt(IntBits::BitsSize)),
+            MirLiteral::I8(_) => MirType::Num(NumberKind::SignedInt(IntBits::Bits8)),
+            MirLiteral::I16(_) => MirType::Num(NumberKind::SignedInt(IntBits::Bits16)),
+            MirLiteral::I32(_) => MirType::Num(NumberKind::SignedInt(IntBits::Bits32)),
+            MirLiteral::I64(_) => MirType::Num(NumberKind::SignedInt(IntBits::Bits64)),
+            MirLiteral::ISize(_) => MirType::Num(NumberKind::SignedInt(IntBits::BitsSize)),
+            MirLiteral::F32(_) => MirType::Num(NumberKind::Float(FloatBits::Bits32)),
+            MirLiteral::F64(_) => MirType::Num(NumberKind::Float(FloatBits::Bits64)),
+        }
+    }
 }
 
-pub fn mir_parse_num_literal(num: &TreeNumberLiteral) -> MirLiteral {
+pub fn mir_parse_literal(lit: &TreeLiteral) -> Result<MirLiteral, ()> {
+    match lit {
+        TreeLiteral::Number(num) => mir_parse_num_literal(num),
+        TreeLiteral::Bool(bool) => mir_parse_bool_literal(bool),
+    }
+}
+
+pub fn mir_parse_num_literal(num: &TreeNumberLiteral) -> Result<MirLiteral, ()> {
     use FloatBits as FB;
     use IntBits as IB;
     use MirLiteral as Lit;
@@ -122,11 +147,11 @@ pub fn mir_parse_num_literal(num: &TreeNumberLiteral) -> MirLiteral {
         Float(FB::Bits64) => Lit::F64(value.parse().unwrap()),
     };
 
-    literal
+    Ok(literal)
 }
 
-pub fn mir_parse_bool_literal(bool: &TreeBoolLiteral) -> MirLiteral {
-    MirLiteral::Bool(bool.value)
+pub fn mir_parse_bool_literal(bool: &TreeBoolLiteral) -> Result<MirLiteral, ()> {
+    Ok(MirLiteral::Bool(bool.value))
 }
 
 #[derive(Debug, Clone, PartialEq)]

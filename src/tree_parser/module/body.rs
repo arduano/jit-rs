@@ -15,7 +15,7 @@ impl TreeBody {
         let mut body = Vec::new();
 
         while !cursor.is_empty() {
-            let expr = get_required_val!(cursor, TreeExpression::parse(cursor, ExprLocation::Root));
+            let expr = get_required_val!(cursor, TreeExpression::parse(cursor, ExprLocation::ROOT));
             body.push(expr);
         }
 

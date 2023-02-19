@@ -55,6 +55,16 @@ impl<'a, T> ParseResult<'a, T> {
     pub fn is_ok(&self) -> bool {
         matches!(self, ParseResult::Ok(..))
     }
+
+    pub fn skip_if(self, cond: bool) -> Self {
+        if cond {
+            return ParseResult::NoMatch {
+                expected: "skip_if",
+            };
+        } else {
+            self
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

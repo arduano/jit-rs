@@ -53,3 +53,20 @@ macro_rules! ident_or_error {
     };
 }
 pub(super) use ident_or_error;
+
+macro_rules! try_parse_ident {
+    ($cursor:ident) => {{
+        let mut new_cursor = $cursor.clone();
+        if let Some(JitToken {
+            kind: JitTokenKind::Ident(name),
+            span: _,
+        }) = new_cursor.next()
+        {
+            $cursor = new_cursor;
+            Some(name)
+        } else {
+            None
+        }
+    }};
+}
+pub(super) use try_parse_ident;

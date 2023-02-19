@@ -6,8 +6,10 @@ use macros::jit_quote;
 
 fn main() {
     let tokens = jit_quote! {
+        const WIDTH = 8usize;
+
         struct EnvelopeLinearTime {
-            time_simd: <f32; 8usize>,
+            time_simd: <f32; WIDTH>,
             end_time: f32,
         }
 
@@ -15,7 +17,7 @@ fn main() {
             env.time_simd[0usize] / env.end_time
         }
 
-        fn get_env_progress_vec(env: *EnvelopeLinearTime) -> <f32; 8usize> {
+        fn get_env_progress_vec(env: *EnvelopeLinearTime) -> <f32; WIDTH> {
             env.time_simd / env.end_time
         }
 
@@ -24,10 +26,10 @@ fn main() {
         }
 
         fn make_env_time(end: u32) -> EnvelopeLinearTime {
-            let vec = zeroed::<<f32; 8usize>>();
+            let vec = zeroed::<<f32; WIDTH>>();
 
             let i = 0usize;
-            while i < 8usize {
+            while i < WIDTH {
                 vec[i] = i as f32;
                 i = i + 1usize;
             }
@@ -120,10 +122,10 @@ fn main() {
             }
         }
 
-        fn sample_stage_vec(stage: *EnvelopeStage) -> <f32; 8usize> {
+        fn sample_stage_vec(stage: *EnvelopeStage) -> <f32; WIDTH> {
             if stage.kind == 0u8 {
                 stage.hold_time = stage.hold_time - 8u32;
-                return extend::<<f32; 8usize>>(stage.end_value);
+                return extend::<<f32; WIDTH>>(stage.end_value);
             } else if stage.kind == 1u8 {
                 let time = get_env_progress_vec(&stage.linear_time);
                 increment_env_time_by(&stage.linear_time, 8u32);
@@ -154,7 +156,7 @@ fn main() {
             if stage.kind == 0u8 {
                 return stage.hold_time < 8u32;
             } else if stage.kind == 1u8 {
-                return stage.linear_time.time_simd[8usize - 1usize] >= stage.linear_time.end_time;
+                return stage.linear_time.time_simd[WIDTH - 1usize] >= stage.linear_time.end_time;
             } else {
                 unreachable();
             }
@@ -189,11 +191,11 @@ fn main() {
             }
         }
 
-        fn sample_envelope_vec_manual(env: *Envelope) -> <f32; 8usize> {
-            let val = extend::<<f32; 8usize>>(0.0f32);
+        fn sample_envelope_vec_manual(env: *Envelope) -> <f32; WIDTH> {
+            let val = extend::<<f32; WIDTH>>(0.0f32);
 
             let i = 0usize;
-            while i < 8usize {
+            while i < WIDTH {
                 let until_end = samples_until_stage_end(&env.stage_data) as usize;
                 if until_end <= 0usize {
                     env.stage = env.stage + 1u8;
@@ -211,82 +213,29 @@ fn main() {
             return val;
         }
 
-        fn sample_envelope_vec(env: *Envelope) -> <f32; 8usize> {
+        fn sample_envelope_vec(env: *Envelope) -> <f32; WIDTH> {
             let until_end = samples_until_stage_end(&env.stage_data) as usize;
 
-            if until_end <= 8usize {
+            if until_end <= WIDTH {
                 let vec = sample_envelope_vec_manual(env);
                 return vec;
             } else {
                 let val = sample_stage_vec(&env.stage_data);
-                env.last_val = val[8usize - 1usize];
+                env.last_val = val[WIDTH - 1usize];
                 return val;
             }
         }
 
-        // pub fn fill_envelope_vector(arr: *f32, len: usize) {
-        //     let params = make_envelope_params();
-        //     let env = make_envelope(params);
-
-        //     let i = 0usize;
-
-        //     while len - i >= 8usize {
-        //         let val = sample_envelope_vec(&env);
-        //         store_vec::<<f32; 8usize>>(&arr[i], val);
-        //         i = i + 8usize;
-        //     }
-
-        //     let last_val = sample_envelope_vec(&env);
-        //     let j = 0usize;
-        //     while i < len  {
-        //         arr[i] = last_val[j];
-        //         i = i + 1usize;
-        //         j = j + 1usize;
-        //     }
-        // }
-
-        struct Generator {
-            envelope: Envelope,
-        }
-
-        fn generate_sample(*Generator) -> <f32; 8usize> {
-            let val = sample_envelope_vec(&env.envelope);
-            val
-        }
-
-        struct Voice {
-            generator: Generator,
-            last_vec: <f32; 8usize>,
-            vec_pos: usize,
-        }
-
-        pub fn make_voice() -> *Voice {
-            let params = make_envelope_params();
-            let env = make_envelope(params);
-
-            let generator = Generator {
-                envelope: env,
-            };
-
-            let voice = Voice {
-                generator: generator,
-                last_vec: extend::<<f32; 8usize>>(0.0f32),
-                vec_pos: 8usize,
-            };
-
-            return &voice;
-        }
-
-        pub fn gen_voice(voice: *Voice, arr: *f32, len: usize) {
+        pub fn fill_envelope_vector(arr: *f32, len: usize) {
             let params = make_envelope_params();
             let env = make_envelope(params);
 
             let i = 0usize;
 
-            while len - i >= 8usize {
+            while len - i >= WIDTH {
                 let val = sample_envelope_vec(&env);
-                store_vec::<<f32; 8usize>>(&arr[i], val);
-                i = i + 8usize;
+                store_vec::<<f32; WIDTH>>(&arr[i], val);
+                i = i + WIDTH;
             }
 
             let last_val = sample_envelope_vec(&env);
@@ -297,6 +246,59 @@ fn main() {
                 j = j + 1usize;
             }
         }
+
+        // struct Generator {
+        //     envelope: Envelope,
+        // }
+
+        // fn generate_sample(*Generator) -> <f32; WIDTH> {
+        //     let val = sample_envelope_vec(&env.envelope);
+        //     val
+        // }
+
+        // struct Voice {
+        //     generator: Generator,
+        //     last_vec: <f32; WIDTH>,
+        //     vec_pos: usize,
+        // }
+
+        // pub fn make_voice() -> *Voice {
+        //     let params = make_envelope_params();
+        //     let env = make_envelope(params);
+
+        //     let generator = Generator {
+        //         envelope: env,
+        //     };
+
+        //     let voice = Voice {
+        //         generator: generator,
+        //         last_vec: extend::<<f32; WIDTH>>(0.0f32),
+        //         vec_pos: WIDTH,
+        //     };
+
+        //     return &voice;
+        // }
+
+        // pub fn gen_voice(voice: *Voice, arr: *f32, len: usize) {
+        //     let params = make_envelope_params();
+        //     let env = make_envelope(params);
+
+        //     let i = 0usize;
+
+        //     while len - i >= WIDTH {
+        //         let val = sample_envelope_vec(&env);
+        //         store_vec::<<f32; WIDTH>>(&arr[i], val);
+        //         i = i + WIDTH;
+        //     }
+
+        //     let last_val = sample_envelope_vec(&env);
+        //     let j = 0usize;
+        //     while i < len  {
+        //         arr[i] = last_val[j];
+        //         i = i + 1usize;
+        //         j = j + 1usize;
+        //     }
+        // }
     };
 
     println!("{}", &tokens);

@@ -2,6 +2,7 @@ mod assertions;
 mod blocks;
 mod calls;
 mod cast;
+mod constants;
 mod expression;
 mod functions;
 mod intrinsic_fns;
@@ -26,8 +27,8 @@ use crate::{
     common::{FloatBits, IntBits, NumberKind},
     mir::operators::mir_parse_binary_expr_list,
     tree_parser::{
-        TreeBody, TreeExpression, TreeExpressionKind, TreeFunction, TreeModule, TreeStruct,
-        TreeType, TreeTypeMarker,
+        TreeBody, TreeExpression, TreeExpressionKind, TreeFunction, TreeLiteralOrIdent, TreeModule,
+        TreeStruct, TreeType, TreeTypeMarker,
     },
 };
 
@@ -36,6 +37,7 @@ use self::{
     blocks::{MirBlockBuilder, MirBlockId},
     calls::mir_parse_static_function_call,
     cast::{mir_cast_to_number, mir_cast_to_vector},
+    constants::{mir_parse_constant, MirConstant},
     intrinsic_fns::mir_try_parse_intrinsic_fn,
     misc::{mir_is_empty_type, mir_make_empty_expr, mir_make_never_expr},
     operators::mir_parse_unary_expr,
@@ -44,6 +46,20 @@ use self::{
 
 pub struct MirTypeContext<'a> {
     structs: &'a [MirStructDeclaration],
+    consts: &'a [MirConstant],
+}
+
+impl MirTypeContext<'_> {
+    pub fn get_struct(&self, name: &str) -> Option<&MirStructDeclaration> {
+        self.structs.iter().find(|s| s.name == name)
+    }
+
+    pub fn get_const_value(&self, name: &str) -> Option<&MirLiteral> {
+        self.consts
+            .iter()
+            .find(|c| c.name == name)
+            .map(|c| &c.value)
+    }
 }
 
 struct MirFunctionContext<'a> {
@@ -70,6 +86,12 @@ pub struct MirExpressionContext<'a> {
 pub fn mir_parse_module(module: &TreeModule) -> Result<MirModule, ()> {
     // FIXME: Process duplicate functions and structs
 
+    let consts = module
+        .consts
+        .iter()
+        .map(mir_parse_constant)
+        .collect::<Result<Vec<_>, _>>()?;
+
     let struct_decls = module
         .structs
         .iter()
@@ -78,6 +100,7 @@ pub fn mir_parse_module(module: &TreeModule) -> Result<MirModule, ()> {
 
     let ty_ctx = MirTypeContext {
         structs: &struct_decls,
+        consts: &consts,
     };
 
     let function_decls = module
@@ -290,11 +313,27 @@ fn mir_parse_type(ty: &TreeType, ctx: &MirTypeContext) -> Result<MirType, ()> {
         TreeType::Ptr(ty) => MirType::Ptr(Box::new(mir_parse_type(&ty, ctx)?)),
         TreeType::ConstArray(ty, size) => {
             let ty = mir_parse_type(&ty, ctx)?;
+            let size = mir_parse_lit_or_const(&size, ctx)?;
 
-            MirType::ConstArray(Box::new(ty), *size)
+            let size = match size {
+                MirLiteral::USize(size) => size,
+                _ => {
+                    panic!("Array size must be a usize");
+                }
+            };
+
+            MirType::ConstArray(Box::new(ty), size as u32)
         }
         TreeType::Vector(ty, width) => {
             let ty = mir_parse_type(&ty, ctx)?;
+            let width = mir_parse_lit_or_const(&width, ctx)?;
+
+            let width = match width {
+                MirLiteral::USize(width) => width,
+                _ => {
+                    panic!("Vector width must be a usize");
+                }
+            };
 
             let ty = match ty {
                 MirType::Num(ty) => ty,
@@ -303,7 +342,23 @@ fn mir_parse_type(ty: &TreeType, ctx: &MirTypeContext) -> Result<MirType, ()> {
                 }
             };
 
-            MirType::Vector(ty, *width)
+            MirType::Vector(ty, width as u32)
+        }
+    })
+}
+
+fn mir_parse_lit_or_const(
+    lit_or_const: &TreeLiteralOrIdent,
+    ctx: &MirTypeContext,
+) -> Result<MirLiteral, ()> {
+    Ok(match lit_or_const {
+        TreeLiteralOrIdent::Literal(lit) => mir_parse_literal(lit)?,
+        TreeLiteralOrIdent::Ident(name) => {
+            let Some(cons) = ctx.get_const_value(&name) else {
+                panic!("Unknown constant: {}", name);
+            };
+
+            cons.clone()
         }
     })
 }
@@ -314,8 +369,7 @@ fn mir_parse_type_marker(
 ) -> Result<MirTypeMarker, ()> {
     Ok(match marker {
         TreeTypeMarker::Type(ty) => MirTypeMarker::Type(mir_parse_type(ty, ctx)?),
-        TreeTypeMarker::NumLiteral(num) => MirTypeMarker::Literal(mir_parse_num_literal(num)),
-        TreeTypeMarker::BoolLiteral(bool) => MirTypeMarker::Literal(mir_parse_bool_literal(bool)),
+        TreeTypeMarker::Literal(lit) => MirTypeMarker::Literal(mir_parse_literal(lit)?),
     })
 }
 
@@ -376,6 +430,17 @@ fn mir_parse_expression(
         TreeExpressionKind::UnaryOp(unary) => mir_parse_unary_expr(unary, ctx, pos)?,
         TreeExpressionKind::Group(inner) => mir_parse_body(inner, ctx)?,
         TreeExpressionKind::VarRead(read) => {
+            if let Some(cons) = ctx.ty.get_const_value(&read.name) {
+                if pos == ExprLocation::NoDeref {
+                    panic!("Cannot dereference a constant");
+                }
+
+                return Ok(MirExpression {
+                    kind: MirExpressionKind::Literal(cons.clone()),
+                    ty: cons.ty(),
+                });
+            }
+
             let var = ctx
                 .variables
                 .get(&read.name)
@@ -409,18 +474,14 @@ fn mir_parse_expression(
 
             mir_make_empty_expr()
         }
-        TreeExpressionKind::Number(num) => {
-            let lit = mir_parse_num_literal(num);
+        TreeExpressionKind::Literal(num) => {
+            let lit = mir_parse_literal(num)?;
 
             MirExpression {
+                ty: lit.ty(),
                 kind: MirExpressionKind::Literal(lit),
-                ty: MirType::Num(num.ty),
             }
         }
-        TreeExpressionKind::Bool(bool) => MirExpression {
-            kind: MirExpressionKind::Literal(mir_parse_bool_literal(bool)),
-            ty: MirType::Bool,
-        },
         TreeExpressionKind::ReturnStatement(ret) => {
             let value = mir_parse_expression(&ret.value, ctx, ExprLocation::Other)?;
             mir_assert_types_equal(&value.ty, &ctx.fn_ctx.return_ty)?;
