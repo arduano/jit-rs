@@ -1,7 +1,6 @@
 use inkwell::{
-    types::BasicType,
     values::{BasicValue, BasicValueEnum},
-    AddressSpace, FloatPredicate, IntPredicate,
+    FloatPredicate, IntPredicate,
 };
 
 use crate::mir::{

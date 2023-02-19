@@ -1,4 +1,4 @@
-use std::borrow::{Borrow, Cow};
+use std::borrow::Cow;
 
 use crate::tree_parser::TreeFunctionNameWithMarkers;
 
