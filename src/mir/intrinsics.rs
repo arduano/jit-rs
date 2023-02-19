@@ -95,5 +95,13 @@ pub enum MirIntrinsicOp {
     Zeroed {
         ty: MirType,
     },
+    Box {
+        value: MirExpression,
+        ty: MirType,
+    },
+    Drop {
+        ptr: MirExpression,
+        ty: MirType,
+    },
     Unreachable,
 }

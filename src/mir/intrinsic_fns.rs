@@ -1,21 +1,21 @@
 use std::ops::Deref;
 
-use crate::tree_parser::{TreeExpression, TreeStaticFnCall, TreeType};
+use crate::tree_parser::{TreeExpression, TreeStaticFnCall, TreeTypeMarker};
 
 use super::{
-    mir_parse_expression, mir_parse_type, ExprLocation, MirExpression, MirExpressionContext,
-    MirExpressionKind, MirIntrinsicOp, MirType, MirTypeContext,
+    mir_parse_expression, mir_parse_type_marker, ExprLocation, MirExpression, MirExpressionContext,
+    MirExpressionKind, MirIntrinsicOp, MirType, MirTypeContext, MirTypeMarker,
 };
 
 pub fn mir_try_parse_intrinsic_fn(
     f: &TreeStaticFnCall,
     ctx: &mut MirExpressionContext,
 ) -> Result<Option<MirExpression>, ()> {
-    Ok(Some(match f.name.deref() {
+    Ok(Some(match f.name.name.deref() {
         "load_vec" => {
-            let ty = parse_1_type_arg(&f.types, ctx.ty)?;
+            let ty = parse_1_type_arg(&f.name.ty_markers, ctx.ty)?;
             let (ty, width) = match ty {
-                MirType::Vector(ty, width) => (ty, width),
+                MirTypeMarker::Type(MirType::Vector(ty, width)) => (ty, width),
                 _ => panic!("Expected a vector type"),
             };
 
@@ -31,9 +31,9 @@ pub fn mir_try_parse_intrinsic_fn(
             }
         }
         "store_vec" => {
-            let ty = parse_1_type_arg(&f.types, ctx.ty)?;
+            let ty = parse_1_type_arg(&f.name.ty_markers, ctx.ty)?;
             let (ty, width) = match ty {
-                MirType::Vector(ty, width) => (ty, width),
+                MirTypeMarker::Type(MirType::Vector(ty, width)) => (ty, width),
                 _ => panic!("Expected a vector type"),
             };
 
@@ -57,9 +57,9 @@ pub fn mir_try_parse_intrinsic_fn(
             }
         }
         "extend" => {
-            let vec_ty = parse_1_type_arg(&f.types, ctx.ty)?;
+            let vec_ty = parse_1_type_arg(&f.name.ty_markers, ctx.ty)?;
             let (ty, width) = match vec_ty {
-                MirType::Vector(ty, width) => (ty, width),
+                MirTypeMarker::Type(MirType::Vector(ty, width)) => (ty, width),
                 _ => panic!("Expected a vector type"),
             };
 
@@ -71,7 +71,7 @@ pub fn mir_try_parse_intrinsic_fn(
                     unit: expr,
                     width,
                 })),
-                ty: vec_ty,
+                ty: MirType::Vector(ty, width),
             }
         }
         "unreachable" => MirExpression {
@@ -79,9 +79,46 @@ pub fn mir_try_parse_intrinsic_fn(
             ty: MirType::Never,
         },
         "zeroed" => {
-            let ty = parse_1_type_arg(&f.types, ctx.ty)?;
+            let ty = parse_1_type_arg(&f.name.ty_markers, ctx.ty)?;
+            let ty = match ty {
+                MirTypeMarker::Type(ty) => ty,
+                _ => panic!("Expected a type"),
+            };
+
             MirExpression {
                 kind: MirExpressionKind::IntrinsicOp(Box::new(MirIntrinsicOp::Zeroed {
+                    ty: ty.clone(),
+                })),
+                ty,
+            }
+        }
+        "boxed" => {
+            if f.args.len() != 1 {
+                panic!("Expected 1 argument");
+            }
+
+            let expr = mir_parse_expression(&f.args[0], ctx, ExprLocation::Other)?;
+            let ty = expr.ty.clone();
+
+            MirExpression {
+                kind: MirExpressionKind::IntrinsicOp(Box::new(MirIntrinsicOp::Box {
+                    value: expr,
+                    ty: ty.clone(),
+                })),
+                ty: ty.as_ptr(),
+            }
+        }
+        "drop" => {
+            if f.args.len() != 1 {
+                panic!("Expected 1 argument");
+            }
+
+            let ptr = mir_parse_expression(&f.args[0], ctx, ExprLocation::Other)?;
+            let ty = ptr.ty.deref_ptr().clone();
+
+            MirExpression {
+                kind: MirExpressionKind::IntrinsicOp(Box::new(MirIntrinsicOp::Drop {
+                    ptr,
                     ty: ty.clone(),
                 })),
                 ty,
@@ -91,13 +128,13 @@ pub fn mir_try_parse_intrinsic_fn(
     }))
 }
 
-fn parse_1_type_arg(args: &[TreeType], ctx: &MirTypeContext) -> Result<MirType, ()> {
+fn parse_1_type_arg(args: &[TreeTypeMarker], ctx: &MirTypeContext) -> Result<MirTypeMarker, ()> {
     if args.len() != 1 {
         panic!("Expected 1 type argument");
     }
 
     let ty = &args[0];
-    return mir_parse_type(ty, ctx);
+    return mir_parse_type_marker(ty, ctx);
 }
 
 fn parse_1_value_arg(

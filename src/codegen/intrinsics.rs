@@ -1,6 +1,7 @@
 use inkwell::{
+    types::BasicType,
     values::{BasicValue, BasicValueEnum},
-    FloatPredicate, IntPredicate,
+    AddressSpace, FloatPredicate, IntPredicate,
 };
 
 use crate::mir::{
@@ -8,7 +9,11 @@ use crate::mir::{
     MirIntrinsicVectorBinaryOp, MirUnaryOp, MirVectorBinaryOp,
 };
 
-use super::{misc::codegen_extend_into_vector, FunctionInsertContext};
+use super::{
+    externals::{get_alloc_fn, get_dealloc_fn},
+    misc::{codegen_extend_into_vector, codegen_get_size_of_ty},
+    FunctionInsertContext,
+};
 
 pub fn codegen_binary_expr<'ctx>(
     op: &MirBinaryOp,
@@ -431,6 +436,46 @@ pub fn codegen_intrinsic_op<'ctx>(
             let value = ctx.write_expression(&unit).unwrap();
 
             Some(codegen_extend_into_vector(ctx, value, *unit_ty, *width as usize).into())
+        }
+        MirIntrinsicOp::Box { value, ty } => {
+            let value = ctx.write_expression(value).unwrap();
+
+            let ty = ctx.get_type(ty);
+            let size = codegen_get_size_of_ty(ty, ctx);
+
+            let alloc = get_alloc_fn(&ctx.module.module);
+
+            let ptr = ctx
+                .module
+                .builder
+                .build_call(alloc, &[size.into()], "alloc")
+                .try_as_basic_value()
+                .left()
+                .unwrap()
+                .into_pointer_value();
+
+            ctx.module.builder.build_store(ptr, value);
+
+            Some(ptr.into())
+        }
+        MirIntrinsicOp::Drop { ptr, ty } => {
+            let ptr = ctx.write_expression(ptr).unwrap();
+
+            let ty = ctx.get_type(ty);
+            let size = codegen_get_size_of_ty(ty, ctx);
+
+            let dealloc = get_dealloc_fn(&ctx.module.module);
+
+            ctx.module
+                .builder
+                .build_call(dealloc, &[ptr.into(), size.into()], "");
+
+            let value = ctx
+                .module
+                .builder
+                .build_load(ty, ptr.into_pointer_value(), "load");
+
+            Some(value)
         }
     }
 }

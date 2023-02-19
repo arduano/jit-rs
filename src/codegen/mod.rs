@@ -1,5 +1,6 @@
 use std::{
     borrow::Cow,
+    cell::RefCell,
     collections::{HashMap, HashSet},
     path::PathBuf,
 };
@@ -28,12 +29,14 @@ use crate::{
 
 use self::{
     cast::codegen_number_cast_expr,
+    externals::{fill_execution_engine_externals, module_append_external_functions},
     intrinsics::{
         codegen_binary_expr, codegen_intrinsic_op, codegen_unary_expr, codegen_vector_binary_expr,
     },
 };
 
 mod cast;
+mod externals;
 mod intrinsics;
 mod misc;
 
@@ -67,17 +70,28 @@ pub struct LlvmCodegenModule<'ctx> {
     builder: Builder<'ctx>,
     structs: HashMap<Cow<'static, str>, MirStruct>,
     llvm_intrinsics_added: HashSet<String>,
+    execution_engine: RefCell<Option<ExecutionEngine<'ctx>>>,
 }
 
 impl<'ctx> LlvmCodegenModule<'ctx> {
     pub fn execution_engine(&self) -> ExecutionEngine<'ctx> {
-        // Calling this is required to make sure the JIT doesn't get optimized away
-        // during LTO. Otherwise we'll have a lot of errors.
-        ExecutionEngine::link_in_mc_jit();
+        self.execution_engine
+            .borrow_mut()
+            .get_or_insert_with(|| {
+                // Calling this is required to make sure the JIT doesn't get optimized away
+                // during LTO. Otherwise we'll have a lot of errors.
+                ExecutionEngine::link_in_mc_jit();
 
-        self.module
-            .create_jit_execution_engine(OptimizationLevel::Aggressive)
-            .unwrap()
+                let engine = self
+                    .module
+                    .create_jit_execution_engine(OptimizationLevel::Aggressive)
+                    .unwrap();
+
+                fill_execution_engine_externals(&self.module, &engine);
+
+                engine
+            })
+            .clone()
     }
 
     pub fn print_functions(&self) {
@@ -164,6 +178,8 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
         let module = context.create_module(name);
         let builder = context.create_builder();
 
+        module_append_external_functions(&module);
+
         // Set at compile time because this is a jit that doesn't cross-compile.
         #[cfg(target_pointer_width = "64")]
         let size_bits = SizeBits::Bits64;
@@ -177,6 +193,7 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
             size_bits,
             structs: HashMap::new(),
             llvm_intrinsics_added: HashSet::new(),
+            execution_engine: RefCell::new(None),
         };
 
         for struc in mir.structs.iter() {
@@ -270,7 +287,7 @@ impl<'ctx> LlvmCodegenModule<'ctx> {
 
         let function = self
             .module
-            .add_function(&function.name, function_type, linking);
+            .add_function(&function.name.as_string(), function_type, linking);
 
         function
     }
@@ -489,7 +506,11 @@ impl<'ctx: 'a, 'a> FunctionInsertContext<'ctx, 'a> {
             MirExpressionKind::CastVector(_) => todo!(),
             MirExpressionKind::PtrCast(cast) => self.write_expression(cast),
             MirExpressionKind::FunctionCall(call) => {
-                let function = self.module.module.get_function(&call.name).unwrap();
+                let function = self
+                    .module
+                    .module
+                    .get_function(&call.name.as_string())
+                    .unwrap();
 
                 let args = call
                     .args

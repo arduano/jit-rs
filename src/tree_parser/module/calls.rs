@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use crate::{
     macro_builder::{JitBasicToken, JitGroupKind, JitToken, JitTokenKind},
     tree_parser::{
@@ -8,13 +6,12 @@ use crate::{
     },
 };
 
-use super::{ExprLocation, TreeExpression, TreeType};
+use super::{ExprLocation, TreeExpression, TreeFunctionNameWithMarkers, TreeTypeMarker};
 
 #[derive(Debug, Clone)]
 pub struct TreeStaticFnCall {
-    pub name: Cow<'static, str>,
+    pub name: TreeFunctionNameWithMarkers,
     pub args: Vec<TreeExpression>,
-    pub types: Vec<TreeType>,
 }
 
 impl TreeStaticFnCall {
@@ -34,7 +31,7 @@ impl TreeStaticFnCall {
                 }
 
                 while !cursor.peek_next_basic(JitBasicToken::RightAngBracket) {
-                    let arg = get_required_val!(cursor, TreeType::parse(cursor.clone()));
+                    let arg = get_required_val!(cursor, TreeTypeMarker::parse(cursor.clone()));
                     types.push(arg);
 
                     let has_comma = cursor.parse_next_basic(JitBasicToken::Comma);
@@ -70,9 +67,11 @@ impl TreeStaticFnCall {
             ParseResult::Ok(
                 cursor,
                 Self {
-                    name: name.clone(),
+                    name: TreeFunctionNameWithMarkers {
+                        name: name.clone(),
+                        ty_markers: types,
+                    },
                     args,
-                    types,
                 },
             )
         } else {

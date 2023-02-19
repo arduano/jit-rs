@@ -3,8 +3,8 @@ use std::borrow::Cow;
 use crate::common::NumberKind;
 
 use super::{
-    variables::MirVariableDecl, MirIntrinsicBinaryOp, MirIntrinsicOp, MirIntrinsicUnaryOp,
-    MirIntrinsicVectorBinaryOp, MirLiteral, MirType, MirVariable,
+    variables::MirVariableDecl, MirFunctionNameWithMarkers, MirIntrinsicBinaryOp, MirIntrinsicOp,
+    MirIntrinsicUnaryOp, MirIntrinsicVectorBinaryOp, MirLiteral, MirType, MirVariable,
 };
 
 #[derive(Debug, Clone)]
@@ -120,7 +120,7 @@ pub struct MirReadArg {
 #[derive(Debug, Clone)]
 pub struct MirFunctionCall {
     pub is_void: bool,
-    pub name: Cow<'static, str>,
+    pub name: MirFunctionNameWithMarkers,
     pub args: Vec<MirExpression>,
 }
 

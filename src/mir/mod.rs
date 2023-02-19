@@ -3,6 +3,7 @@ mod blocks;
 mod calls;
 mod cast;
 mod expression;
+mod functions;
 mod intrinsic_fns;
 mod intrinsics;
 mod misc;
@@ -15,6 +16,7 @@ mod variables;
 use std::{collections::HashMap, ops::Deref};
 
 pub use expression::*;
+pub use functions::*;
 pub use intrinsics::*;
 pub use statement::*;
 pub use structures::*;
@@ -25,7 +27,7 @@ use crate::{
     mir::operators::mir_parse_binary_expr_list,
     tree_parser::{
         TreeBody, TreeExpression, TreeExpressionKind, TreeFunction, TreeModule, TreeStruct,
-        TreeType,
+        TreeType, TreeTypeMarker,
     },
 };
 
@@ -40,7 +42,7 @@ use self::{
     variables::VariableStorage,
 };
 
-struct MirTypeContext<'a> {
+pub struct MirTypeContext<'a> {
     structs: &'a [MirStructDeclaration],
 }
 
@@ -150,13 +152,19 @@ fn mir_parse_function_decl(
     function: &TreeFunction,
     ty_ctx: &MirTypeContext,
 ) -> Result<MirFunctionDeclaration, ()> {
+    let name = mir_parse_fn_name_with_markers(&function.name, ty_ctx)?;
+
+    if name.markers.len() != 0 && function.public {
+        panic!("Public function with markers is not allowed");
+    }
+
     Ok(MirFunctionDeclaration {
         public: function.public,
         ret_type: match function.ret_type {
             Some(ref ty) => mir_parse_type(ty, ty_ctx)?,
             None => MirType::Void,
         },
-        name: function.name.clone(),
+        name,
         args: function
             .args
             .iter()
@@ -174,11 +182,9 @@ fn mir_parse_function(
     function: &TreeFunction,
     ctx: &MirFunctionContext,
 ) -> Result<MirFunction, ()> {
-    let decl = ctx
-        .functions
-        .iter()
-        .find(|decl| decl.name == function.name)
-        .unwrap();
+    let name = mir_parse_fn_name_with_markers(&function.name, ctx.ty)?;
+
+    let decl = ctx.functions.iter().find(|decl| decl.name == name).unwrap();
 
     let mut ctx = MirExpressionContext {
         fn_ctx: ctx,
@@ -302,6 +308,17 @@ fn mir_parse_type(ty: &TreeType, ctx: &MirTypeContext) -> Result<MirType, ()> {
     })
 }
 
+fn mir_parse_type_marker(
+    marker: &TreeTypeMarker,
+    ctx: &MirTypeContext,
+) -> Result<MirTypeMarker, ()> {
+    Ok(match marker {
+        TreeTypeMarker::Type(ty) => MirTypeMarker::Type(mir_parse_type(ty, ctx)?),
+        TreeTypeMarker::NumLiteral(num) => MirTypeMarker::Literal(mir_parse_num_literal(num)),
+        TreeTypeMarker::BoolLiteral(bool) => MirTypeMarker::Literal(mir_parse_bool_literal(bool)),
+    })
+}
+
 fn mir_parse_body(body: &TreeBody, ctx: &mut MirExpressionContext) -> Result<MirExpression, ()> {
     if body.body.is_empty() {
         return Ok(MirExpression {
@@ -393,40 +410,15 @@ fn mir_parse_expression(
             mir_make_empty_expr()
         }
         TreeExpressionKind::Number(num) => {
-            use FloatBits as FB;
-            use IntBits as IB;
-            use MirLiteral as Lit;
-            use NumberKind::*;
-
-            // FIXME: Parse numbers with underscores
-
-            let value = &num.value;
-            let literal = match num.ty {
-                UnsignedInt(IB::Bits8) => Lit::U8(value.parse().unwrap()),
-                UnsignedInt(IB::Bits16) => Lit::U16(value.parse().unwrap()),
-                UnsignedInt(IB::Bits32) => Lit::U32(
-                    value
-                        .parse()
-                        .expect(&format!("Failed to parse {} as u32", value)),
-                ),
-                UnsignedInt(IB::Bits64) => Lit::U64(value.parse().unwrap()),
-                UnsignedInt(IB::BitsSize) => Lit::USize(value.parse().unwrap()),
-                SignedInt(IB::Bits8) => Lit::I8(value.parse().unwrap()),
-                SignedInt(IB::Bits16) => Lit::I16(value.parse().unwrap()),
-                SignedInt(IB::Bits32) => Lit::I32(value.parse().unwrap()),
-                SignedInt(IB::Bits64) => Lit::I64(value.parse().unwrap()),
-                SignedInt(IB::BitsSize) => Lit::ISize(value.parse().unwrap()),
-                Float(FB::Bits32) => Lit::F32(value.parse().unwrap()),
-                Float(FB::Bits64) => Lit::F64(value.parse().unwrap()),
-            };
+            let lit = mir_parse_num_literal(num);
 
             MirExpression {
-                kind: MirExpressionKind::Literal(literal),
+                kind: MirExpressionKind::Literal(lit),
                 ty: MirType::Num(num.ty),
             }
         }
         TreeExpressionKind::Bool(bool) => MirExpression {
-            kind: MirExpressionKind::Literal(MirLiteral::Bool(bool.value)),
+            kind: MirExpressionKind::Literal(mir_parse_bool_literal(bool)),
             ty: MirType::Bool,
         },
         TreeExpressionKind::ReturnStatement(ret) => {

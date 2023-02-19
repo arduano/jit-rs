@@ -8,12 +8,18 @@ use crate::{
     },
 };
 
-use super::{TreeBody, TreeType};
+use super::{TreeBody, TreeType, TreeTypeMarker};
+
+#[derive(Debug, Clone)]
+pub struct TreeFunctionNameWithMarkers {
+    pub name: Cow<'static, str>,
+    pub ty_markers: Vec<TreeTypeMarker>,
+}
 
 #[derive(Debug, Clone)]
 pub struct TreeFunction {
     pub public: bool,
-    pub name: Cow<'static, str>,
+    pub name: TreeFunctionNameWithMarkers,
     pub args: Vec<TreeFunctionArg>,
     pub ret_type: Option<TreeType>,
     pub body: TreeBody,
@@ -30,6 +36,22 @@ impl TreeFunction {
         }
 
         let name = ident_or_error!(cursor, "expected function name");
+
+        let mut ty_markers = Vec::new();
+
+        if cursor.parse_next_basic(JitBasicToken::LeftAngBracket) {
+            while !cursor.peek_next_basic(JitBasicToken::RightAngBracket) {
+                let arg = get_required_val!(cursor, TreeTypeMarker::parse(cursor.clone()));
+                ty_markers.push(arg);
+
+                let has_comma = cursor.parse_next_basic(JitBasicToken::Comma);
+
+                if !has_comma && !cursor.peek_next_basic(JitBasicToken::RightAngBracket) {
+                    return ParseResult::error("Expected a comma");
+                }
+            }
+            cursor.parse_next_basic(JitBasicToken::RightAngBracket);
+        }
 
         let mut args_cursor = pass_val!(cursor.parse_next_group(JitGroupKind::Parentheses));
         let mut args = Vec::new();
@@ -59,7 +81,10 @@ impl TreeFunction {
             cursor,
             Self {
                 public: is_pub,
-                name: name.clone(),
+                name: TreeFunctionNameWithMarkers {
+                    name: name.clone(),
+                    ty_markers,
+                },
                 args,
                 ret_type,
                 body,

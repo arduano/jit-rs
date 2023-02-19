@@ -1,14 +1,16 @@
 use crate::tree_parser::TreeStaticFnCall;
 
 use super::{
-    mir_parse_expression, ExprLocation, MirExpression, MirExpressionContext, MirFunctionCall,
+    mir_parse_expression, mir_parse_fn_name_with_markers, ExprLocation, MirExpression,
+    MirExpressionContext, MirFunctionCall,
 };
 
 pub fn mir_parse_static_function_call(
     call: &TreeStaticFnCall,
     ctx: &mut MirExpressionContext,
 ) -> Result<Option<MirExpression>, ()> {
-    let found_fn = ctx.functions.iter().find(|f| f.name == call.name);
+    let name = mir_parse_fn_name_with_markers(&call.name, &ctx.ty)?;
+    let found_fn = ctx.functions.iter().find(|f| f.name == name);
 
     let Some(found_fn) = found_fn else {
         return Ok(None);

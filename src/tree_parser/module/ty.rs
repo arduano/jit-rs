@@ -9,7 +9,7 @@ use crate::{
     },
 };
 
-use super::TreeNumberLiteral;
+use super::{TreeBoolLiteral, TreeNumberLiteral};
 
 #[derive(Debug, Clone)]
 pub enum TreeType {
@@ -117,6 +117,29 @@ impl TreeType {
             ParseResult::Ok(cursor, Self::Base(BaseTreeType { name: name.clone() }))
         } else {
             ParseResult::no_match(Self::KIND)
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum TreeTypeMarker {
+    Type(TreeType),
+    NumLiteral(TreeNumberLiteral),
+    BoolLiteral(TreeBoolLiteral),
+}
+
+impl TreeTypeMarker {
+    const KIND: &'static str = "type marker";
+
+    pub fn parse<'a>(mut cursor: ParseCursor<'a>) -> ParseResult<'a, Self> {
+        if let Some(val) = pass_val!(cursor, TreeType::parse(cursor.clone())) {
+            return ParseResult::Ok(cursor, Self::Type(val));
+        } else if let Some(val) = pass_val!(cursor, TreeNumberLiteral::parse(cursor.clone())) {
+            return ParseResult::Ok(cursor, Self::NumLiteral(val));
+        } else if let Some(val) = pass_val!(cursor, TreeBoolLiteral::parse(cursor.clone())) {
+            return ParseResult::Ok(cursor, Self::BoolLiteral(val));
+        } else {
+            return ParseResult::no_match(Self::KIND);
         }
     }
 }

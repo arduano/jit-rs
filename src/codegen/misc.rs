@@ -1,6 +1,7 @@
 use inkwell::{
-    types::VectorType,
-    values::{BasicValueEnum, VectorValue},
+    types::{BasicType, BasicTypeEnum, VectorType},
+    values::{BasicValueEnum, IntValue, VectorValue},
+    AddressSpace,
 };
 
 use crate::common::NumberKind;
@@ -39,4 +40,21 @@ pub fn codegen_get_true_vector<'ctx, 'a>(
     values.resize_with(width, || value.clone());
     let vector = VectorType::const_vector(&values);
     vector
+}
+
+pub fn codegen_get_size_of_ty<'ctx, 'a>(
+    ty: BasicTypeEnum<'ctx>,
+    ctx: &mut FunctionInsertContext<'ctx, 'a>,
+) -> IntValue<'ctx> {
+    let null = ty.ptr_type(AddressSpace::default()).const_null();
+    let one = ctx.module.context.i32_type().const_int(1, false);
+
+    let offset = unsafe { ctx.module.builder.build_gep(ty, null, &[one], "offset") };
+
+    let size = ctx
+        .module
+        .builder
+        .build_ptr_to_int(offset, ctx.module.context.i32_type(), "size");
+
+    size
 }
