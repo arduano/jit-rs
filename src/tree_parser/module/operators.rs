@@ -25,7 +25,7 @@ impl TreeBinaryOpKind {
     const KIND: &'static str = "binary operator";
 
     pub fn parse<'a>(mut cursor: ParseCursor<'a>) -> ParseResult<'a, Self> {
-        let next = cursor.peek(0);
+        let next = cursor.peek();
 
         let op = match next {
             Some(JitToken { kind, span: _ }) => match kind {
@@ -72,7 +72,7 @@ impl TreeUnaryOpKind {
     const KIND: &'static str = "unary operator";
 
     pub fn parse<'a>(mut cursor: ParseCursor<'a>) -> ParseResult<'a, Self> {
-        let next = cursor.peek(0);
+        let next = cursor.peek();
 
         let op = match next {
             Some(JitToken { kind, span: _ }) => match kind {

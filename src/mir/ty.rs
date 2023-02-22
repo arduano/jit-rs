@@ -1,7 +1,7 @@
 use std::{borrow::Cow, fmt::Formatter};
 
 use crate::{
-    common::{FloatBits, IntBits, NumberKind},
+    common::{FloatBits, IntBits, NumberKind, NumberValue},
     tree_parser::{TreeBoolLiteral, TreeLiteral, TreeNumberLiteral},
 };
 
@@ -57,7 +57,7 @@ impl MirType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy)]
 pub enum MirLiteral {
     Bool(bool),
     U8(u8),
@@ -73,6 +73,28 @@ pub enum MirLiteral {
     F32(f32),
     F64(f64),
 }
+
+impl PartialEq for MirLiteral {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Bool(l0), Self::Bool(r0)) => l0 == r0,
+            (Self::U8(l0), Self::U8(r0)) => l0 == r0,
+            (Self::U16(l0), Self::U16(r0)) => l0 == r0,
+            (Self::U32(l0), Self::U32(r0)) => l0 == r0,
+            (Self::U64(l0), Self::U64(r0)) => l0 == r0,
+            (Self::USize(l0), Self::USize(r0)) => l0 == r0,
+            (Self::I8(l0), Self::I8(r0)) => l0 == r0,
+            (Self::I16(l0), Self::I16(r0)) => l0 == r0,
+            (Self::I32(l0), Self::I32(r0)) => l0 == r0,
+            (Self::I64(l0), Self::I64(r0)) => l0 == r0,
+            (Self::ISize(l0), Self::ISize(r0)) => l0 == r0,
+            (Self::F32(l0), Self::F32(r0)) => l0 == r0 || (l0.is_nan() && r0.is_nan()),
+            (Self::F64(l0), Self::F64(r0)) => l0 == r0 || (l0.is_nan() && r0.is_nan()),
+            _ => false,
+        }
+    }
+}
+impl Eq for MirLiteral {}
 
 impl MirLiteral {
     pub fn format_as_mangled_unique(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -120,31 +142,19 @@ pub fn mir_parse_literal(lit: &TreeLiteral) -> Result<MirLiteral, ()> {
 }
 
 pub fn mir_parse_num_literal(num: &TreeNumberLiteral) -> Result<MirLiteral, ()> {
-    use FloatBits as FB;
-    use IntBits as IB;
-    use MirLiteral as Lit;
-    use NumberKind::*;
-
-    // FIXME: Parse numbers with underscores
-
-    let value = &num.value;
-    let literal = match num.ty {
-        UnsignedInt(IB::Bits8) => Lit::U8(value.parse().unwrap()),
-        UnsignedInt(IB::Bits16) => Lit::U16(value.parse().unwrap()),
-        UnsignedInt(IB::Bits32) => Lit::U32(
-            value
-                .parse()
-                .expect(&format!("Failed to parse {} as u32", value)),
-        ),
-        UnsignedInt(IB::Bits64) => Lit::U64(value.parse().unwrap()),
-        UnsignedInt(IB::BitsSize) => Lit::USize(value.parse().unwrap()),
-        SignedInt(IB::Bits8) => Lit::I8(value.parse().unwrap()),
-        SignedInt(IB::Bits16) => Lit::I16(value.parse().unwrap()),
-        SignedInt(IB::Bits32) => Lit::I32(value.parse().unwrap()),
-        SignedInt(IB::Bits64) => Lit::I64(value.parse().unwrap()),
-        SignedInt(IB::BitsSize) => Lit::ISize(value.parse().unwrap()),
-        Float(FB::Bits32) => Lit::F32(value.parse().unwrap()),
-        Float(FB::Bits64) => Lit::F64(value.parse().unwrap()),
+    let literal = match num.value {
+        NumberValue::U8(val) => MirLiteral::U8(val),
+        NumberValue::U16(val) => MirLiteral::U16(val),
+        NumberValue::U32(val) => MirLiteral::U32(val),
+        NumberValue::U64(val) => MirLiteral::U64(val),
+        NumberValue::USize(val) => MirLiteral::USize(val),
+        NumberValue::I8(val) => MirLiteral::I8(val),
+        NumberValue::I16(val) => MirLiteral::I16(val),
+        NumberValue::I32(val) => MirLiteral::I32(val),
+        NumberValue::I64(val) => MirLiteral::I64(val),
+        NumberValue::ISize(val) => MirLiteral::ISize(val),
+        NumberValue::F32(val) => MirLiteral::F32(val),
+        NumberValue::F64(val) => MirLiteral::F64(val),
     };
 
     Ok(literal)
@@ -154,7 +164,7 @@ pub fn mir_parse_bool_literal(bool: &TreeBoolLiteral) -> Result<MirLiteral, ()> 
     Ok(MirLiteral::Bool(bool.value))
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MirTypeMarker {
     Type(MirType),
     Literal(MirLiteral),

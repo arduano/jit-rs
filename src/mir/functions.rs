@@ -6,7 +6,7 @@ use super::{
     mir_parse_type_marker, MirBlock, MirType, MirTypeContext, MirTypeMarker, MirVariableDeclare,
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MirFunctionNameWithMarkers {
     pub name: Cow<'static, str>,
     pub markers: Vec<MirTypeMarker>,

@@ -49,7 +49,7 @@ impl TreeModule {
             } else if let Some(cons) = pass_val!(cursor, TreeConstant::parse(cursor.clone())) {
                 consts.push(cons);
             } else {
-                dbg!(cursor.peek(0));
+                dbg!(cursor.peek());
                 return ParseResult::error("expected const, function or struct");
             }
         }

@@ -15,6 +15,8 @@ impl Parse for Mapper {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut tokens = Vec::new();
 
+        let vec = quote! {let mut tokens = Vec::new();};
+
         while !input.is_empty() {
             let span = input.span();
 
@@ -65,7 +67,9 @@ impl Parse for Mapper {
             try_basic!(>, RightAngBracket);
 
             if res.is_none() {
-                if input.peek(LitInt) {
+                if input.peek(Token![#]) {
+                    res = Some(parse_insertion(input)?);
+                } else if input.peek(LitInt) {
                     res = Some(parse_lit_int(input)?);
                 } else if input.peek(LitFloat) {
                     res = Some(parse_lit_float(input)?);
@@ -108,15 +112,19 @@ impl Parse for Mapper {
             };
 
             let span = quote! { JitSpan{} };
-            let token = quote! { JitToken::new(#res, #span) };
+            let token = quote! { JitTokenWritable::write(#res, &mut tokens, #span) };
 
             tokens.push(token);
         }
 
         Ok(Self {
             token_tree: quote! {
-                JitTokenTree {
-                    tokens: vec![#(#tokens),*],
+                {
+                    #vec
+                    #(#tokens);*;
+                    JitTokenTree {
+                        tokens: tokens,
+                    }
                 }
             },
         })
@@ -140,35 +148,26 @@ fn parse_lit_int(input: ParseStream) -> syn::Result<proc_macro2::TokenStream> {
         ));
     }
 
-    let (kind_str, bits_str) = token.suffix().split_at(1);
-
-    let bits = match bits_str {
-        "8" => quote!(Bits8),
-        "16" => quote!(Bits16),
-        "32" => quote!(Bits32),
-        "64" => quote!(Bits64),
-        "size" => quote!(BitsSize),
+    let kind = match token.suffix() {
+        "u8" => quote!(U8),
+        "u16" => quote!(U16),
+        "u32" => quote!(U32),
+        "u64" => quote!(U64),
+        "usize" => quote!(USize),
+        "i8" => quote!(I8),
+        "i16" => quote!(I16),
+        "i32" => quote!(I32),
+        "i64" => quote!(I64),
+        "isize" => quote!(ISize),
+        "f32" => quote!(F32),
+        "f64" => quote!(F64),
         _ => return Err(syn::Error::new(span, "Expected a valid integer bit size")),
     };
 
-    let kind = match kind_str {
-        "i" => quote!(NumberKind::SignedInt(IntBits::#bits)),
-        "u" => quote!(NumberKind::UnsignedInt(IntBits::#bits)),
-        "f" => {
-            match bits_str {
-                "32" => {}
-                "64" => {}
-                _ => return Err(syn::Error::new(span, "Expected a valid float bit size")),
-            }
-            quote!(NumberKind::Float(FloatBits::#bits))
-        }
-        _ => return Err(syn::Error::new(span, "Expected a valid integer type")),
-    };
-
-    let value = token.base10_parse::<String>()?;
+    let value = quote!(NumberValue::#kind(#token));
 
     Ok(quote! {
-        JitTokenKind::Number(#kind, #value.into())
+        JitTokenKind::Number(#value)
     })
 }
 
@@ -183,23 +182,16 @@ fn parse_lit_float(input: ParseStream) -> syn::Result<proc_macro2::TokenStream> 
         ));
     }
 
-    let (kind, bits) = token.suffix().split_at(1);
-
-    let bits = match bits {
-        "32" => quote!(FloatBits::Bits32),
-        "64" => quote!(FloatBits::Bits64),
+    let kind = match token.suffix() {
+        "f32" => quote!(F32),
+        "f64" => quote!(F64),
         _ => return Err(syn::Error::new(span, "Expected a valid integer bit size")),
     };
 
-    let kind = match kind {
-        "f" => quote!(NumberKind::Float(#bits)),
-        _ => return Err(syn::Error::new(span, "Expected a valid float type")),
-    };
-
-    let value = token.base10_parse::<String>()?;
+    let value = quote!(NumberValue::#kind(#token));
 
     Ok(quote! {
-        JitTokenKind::Number(#kind, #value.into())
+        JitTokenKind::Number(#value)
     })
 }
 
@@ -220,4 +212,12 @@ fn parse_ident(input: ParseStream) -> syn::Result<proc_macro2::TokenStream> {
     Ok(quote! {
         JitTokenKind::Ident(#value.into())
     })
+}
+
+fn parse_insertion(input: ParseStream) -> syn::Result<proc_macro2::TokenStream> {
+    let _: Token![#] = input.parse()?;
+
+    let ident: Ident = input.parse()?;
+
+    Ok(quote! { #ident })
 }

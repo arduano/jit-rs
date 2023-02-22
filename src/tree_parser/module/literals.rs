@@ -1,7 +1,5 @@
-use std::borrow::Cow;
-
 use crate::{
-    common::NumberKind,
+    common::NumberValue,
     macro_builder::{JitToken, JitTokenKind},
     tree_parser::{
         macros::pass_val,
@@ -11,8 +9,7 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct TreeNumberLiteral {
-    pub value: Cow<'static, str>,
-    pub ty: NumberKind,
+    pub value: NumberValue,
 }
 
 impl TreeNumberLiteral {
@@ -22,17 +19,11 @@ impl TreeNumberLiteral {
         let token = cursor.next();
 
         if let Some(JitToken {
-            kind: JitTokenKind::Number(ty, str),
+            kind: JitTokenKind::Number(val),
             span: _,
         }) = token
         {
-            ParseResult::Ok(
-                cursor,
-                Self {
-                    value: str.clone(),
-                    ty: ty.clone(),
-                },
-            )
+            ParseResult::Ok(cursor, Self { value: *val })
         } else {
             ParseResult::no_match(Self::KIND)
         }

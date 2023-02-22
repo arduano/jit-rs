@@ -5,8 +5,10 @@ use jit_rs::tree_parser::*;
 use macros::jit_quote;
 
 fn main() {
+    let width = 8usize;
+
     let tokens = jit_quote! {
-        const WIDTH = 8usize;
+        const WIDTH = #width;
 
         struct EnvelopeLinearTime {
             time_simd: <f32; WIDTH>,

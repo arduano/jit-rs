@@ -97,7 +97,7 @@ impl<'a> ParseCursor<'a> {
         if let Some(JitToken {
             kind: JitTokenKind::Basic(b),
             ..
-        }) = self.peek(0)
+        }) = self.peek()
         {
             if *b == basic {
                 return true;
@@ -114,7 +114,7 @@ impl<'a> ParseCursor<'a> {
         if let Some(JitToken {
             kind: JitTokenKind::Grouped { kind, tree },
             ..
-        }) = self.peek(0)
+        }) = self.peek()
         {
             if *kind == group_kind {
                 self.next();
@@ -125,8 +125,8 @@ impl<'a> ParseCursor<'a> {
         Err(ParseError::new(format!("expected {}", group_kind)))
     }
 
-    pub fn peek(&self, ahead: usize) -> Option<&'a JitToken> {
-        self.tokens.tokens.get(self.index + ahead)
+    pub fn peek(&self) -> Option<&'a JitToken> {
+        self.clone().next()
     }
 
     pub fn is_empty(&self) -> bool {

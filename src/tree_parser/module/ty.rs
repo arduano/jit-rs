@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 
 use crate::{
-    common::{IntBits, NumberKind},
     macro_builder::{JitBasicToken, JitGroupKind, JitToken, JitTokenKind},
     tree_parser::{
         macros::{get_required_val, pass_val, try_parse_ident},
@@ -9,7 +8,7 @@ use crate::{
     },
 };
 
-use super::{TreeLiteral, TreeNumberLiteral};
+use super::TreeLiteral;
 
 #[derive(Debug, Clone)]
 pub enum TreeType {

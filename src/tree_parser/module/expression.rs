@@ -97,7 +97,7 @@ impl TreeExpression {
         } else if let Some(expr) = pass_val!(cursor, TreeBreakStatement::parse(cursor.clone())) {
             TreeExpressionKind::BreakStatement(expr)
         } else {
-            dbg!(cursor.peek(0));
+            dbg!(cursor.peek());
             return ParseResult::error("couldn't parse expression");
         };
 

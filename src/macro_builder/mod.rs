@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-pub use crate::common::{FloatBits, IntBits, NumberKind};
+pub use crate::common::{FloatBits, IntBits, NumberKind, NumberValue};
 
 #[derive(Debug, Clone)]
 pub struct JitSpan {}
@@ -8,7 +8,7 @@ pub struct JitSpan {}
 #[derive(Debug, Clone)]
 pub enum JitTokenKind {
     Ident(Cow<'static, str>),
-    Number(NumberKind, Cow<'static, str>),
+    Number(NumberValue),
     Bool(bool),
     Grouped {
         kind: JitGroupKind,
@@ -161,7 +161,7 @@ impl std::fmt::Display for JitTokenTreePrinter<'_> {
                 },
 
                 JitTokenKind::Ident(ident) => write!(f, "{}", ident)?,
-                JitTokenKind::Number(size, val) => write!(f, "{}{}", val, size)?,
+                JitTokenKind::Number(val) => write!(f, "{}{}", val, val.kind())?,
                 JitTokenKind::Bool(val) => write!(f, "{}", val)?,
 
                 JitTokenKind::Basic(basic) => match basic {
@@ -218,3 +218,69 @@ impl std::fmt::Display for JitTokenTreePrinter<'_> {
         Ok(())
     }
 }
+
+pub trait JitTokenWritable {
+    fn len(&self) -> usize;
+    fn write(self, tokens: &mut Vec<JitToken>, span: JitSpan);
+}
+
+impl JitTokenWritable for JitTokenTree {
+    fn len(&self) -> usize {
+        self.tokens.len()
+    }
+
+    fn write(mut self, tokens: &mut Vec<JitToken>, _: JitSpan) {
+        tokens.append(&mut self.tokens)
+    }
+}
+
+impl JitTokenWritable for &JitTokenTree {
+    fn len(&self) -> usize {
+        self.tokens.len()
+    }
+
+    fn write(self, tokens: &mut Vec<JitToken>, _: JitSpan) {
+        tokens.reserve(self.tokens.len());
+        tokens.extend(self.tokens.iter().cloned())
+    }
+}
+
+impl JitTokenWritable for JitTokenKind {
+    fn len(&self) -> usize {
+        1
+    }
+
+    fn write(self, tokens: &mut Vec<JitToken>, span: JitSpan) {
+        tokens.push(JitToken { kind: self, span })
+    }
+}
+
+macro_rules! impl_writable_num {
+    ($num:ty, $var:ident) => {
+        impl JitTokenWritable for $num {
+            fn len(&self) -> usize {
+                1
+            }
+
+            fn write(self, tokens: &mut Vec<JitToken>, span: JitSpan) {
+                tokens.push(JitToken {
+                    kind: JitTokenKind::Number(NumberValue::$var(self)),
+                    span,
+                })
+            }
+        }
+    };
+}
+
+impl_writable_num!(u8, U8);
+impl_writable_num!(u16, U16);
+impl_writable_num!(u32, U32);
+impl_writable_num!(u64, U64);
+impl_writable_num!(usize, USize);
+impl_writable_num!(i8, I8);
+impl_writable_num!(i16, I16);
+impl_writable_num!(i32, I32);
+impl_writable_num!(i64, I64);
+impl_writable_num!(isize, ISize);
+impl_writable_num!(f32, F32);
+impl_writable_num!(f64, F64);
